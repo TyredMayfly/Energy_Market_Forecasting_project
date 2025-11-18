@@ -481,3 +481,127 @@ class TestWeatherFeatureSelection:
         assert key1 != key2
         assert key1 in service.trained_models
         assert key2 in service.trained_models
+
+
+class TestHistoricalWindowFeature:
+    """Tests for historical window functionality."""
+    
+    def test_generate_forecast_with_historical_window(self, mock_env_vars, sample_market_data):
+        """Test that historical_window_hours parameter includes historical data in forecast."""
+        save_market_data(sample_market_data, "day_ahead")
+        
+        service = ForecastService()
+        config = TrainingDataConfig(use_weather_data=False)
+        forecast_start = datetime(2025, 1, 8, 0, 0, 0)
+        
+        # Generate forecast with 24-hour historical window
+        df_forecast = service.generate_forecast(
+            market_type="day_ahead",
+            model_type="persistence",
+            horizon_hours=24,
+            forecast_start=forecast_start,
+            historical_window_hours=24,
+            training_config=config
+        )
+        
+        assert df_forecast is not None
+        assert not df_forecast.empty
+        
+        # Should have historical + forecast data
+        # 24 hours historical + 24 hours forecast = 48 hours * 4 intervals = 192 rows
+        assert len(df_forecast) == 192
+        
+        # First timestamp should be 24 hours before forecast_start
+        expected_first = forecast_start - pd.Timedelta(hours=24)
+        assert df_forecast["timestamp_utc"].iloc[0] == expected_first
+    
+    def test_generate_forecast_with_different_historical_windows(self, mock_env_vars, sample_market_data):
+        """Test different historical window sizes."""
+        save_market_data(sample_market_data, "day_ahead")
+        
+        service = ForecastService()
+        config = TrainingDataConfig(use_weather_data=False)
+        forecast_start = datetime(2025, 1, 8, 0, 0, 0)
+        
+        # Test with 48-hour window
+        df_48h = service.generate_forecast(
+            market_type="day_ahead",
+            model_type="persistence",
+            horizon_hours=24,
+            forecast_start=forecast_start,
+            historical_window_hours=48,
+            training_config=config
+        )
+        
+        # Test with 72-hour window
+        df_72h = service.generate_forecast(
+            market_type="day_ahead",
+            model_type="persistence",
+            horizon_hours=24,
+            forecast_start=forecast_start,
+            historical_window_hours=72,
+            training_config=config
+        )
+        
+        # 48h + 24h = 72h * 4 intervals = 288 rows
+        assert len(df_48h) == 288
+        
+        # 72h + 24h = 96h * 4 intervals = 384 rows
+        assert len(df_72h) == 384
+    
+    def test_historical_window_affects_rmse_calculation(self, mock_env_vars, sample_market_data):
+        """Test that historical window affects RMSE calculation coverage."""
+        save_market_data(sample_market_data, "day_ahead")
+        
+        service = ForecastService()
+        config = TrainingDataConfig(use_weather_data=False)
+        forecast_start = datetime(2025, 1, 8, 0, 0, 0)
+        
+        # Generate forecast with 72-hour historical window
+        df_forecast = service.generate_forecast(
+            market_type="day_ahead",
+            model_type="persistence",
+            horizon_hours=24,
+            forecast_start=forecast_start,
+            historical_window_hours=72,
+            training_config=config
+        )
+        
+        # Calculate RMSE - should have more overlap points with larger historical window
+        rmse_result = service.calculate_forecast_rmse(df_forecast, "day_ahead")
+        
+        assert rmse_result is not None
+        rmse, n_points = rmse_result
+        
+        # Should have points from the historical window
+        # 72h historical * 4 intervals = 288 points (if all data available)
+        assert n_points > 0
+        assert rmse >= 0
+    
+    def test_compare_models_with_historical_window(self, mock_env_vars, sample_market_data):
+        """Test model comparison with historical window."""
+        save_market_data(sample_market_data, "day_ahead")
+        
+        service = ForecastService()
+        config = TrainingDataConfig(use_weather_data=False)
+        forecast_start = datetime(2025, 1, 8, 0, 0, 0)
+        
+        df_comparison = service.compare_models(
+            market_type="day_ahead",
+            model_types=["persistence", "linear_regression"],
+            horizon_hours=24,
+            forecast_start=forecast_start,
+            historical_window_hours=48,
+            training_config=config
+        )
+        
+        assert df_comparison is not None
+        assert not df_comparison.empty
+        
+        # Should include historical data for both models
+        # 48h historical + 24h forecast = 72h * 4 intervals * 2 models = 576 rows
+        assert len(df_comparison) == 576
+        
+        # Check both models are present
+        assert "persistence" in df_comparison["model_type"].values
+        assert "linear_regression" in df_comparison["model_type"].values
