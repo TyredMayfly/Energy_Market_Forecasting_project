@@ -36,11 +36,11 @@ ENV/
 # Environment variables
 .env
 
-# Data files
-/data/*.csv
+# Data files (excluding demo data needed for deployment)
+# /data/*.csv  # Commented out to include demo CSV files
 /data/*.parquet
 /data/*.nc
-/data/*.json
+# /data/*.json  # Commented out in case you have demo JSON files
 
 # Keep data directory structure
 !/data/.gitkeep
