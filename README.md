@@ -1,187 +1,236 @@
-# Market Forecasting - Educational Power Market Forecasting for the Netherlands
+# Energy Market Forecasting - Power Price Forecasting for the Netherlands
 
-An educational web application for learning about power market forecasting in the Netherlands. This project demonstrates how to fetch real market data from ENTSO-E, combine it with weather data from KNMI, and build simple forecasting models using scikit-learn.
+A production-ready web application for forecasting power market prices in the Netherlands. This interactive Streamlit application demonstrates real-time market forecasting using demo data, combining ENTSO-E market prices with KNMI weather data and machine learning models.
+
+🌐 **Live Demo**: [https://energymarketforecastingproject.streamlit.app/](https://energymarketforecastingproject.streamlit.app/)
 
 ## Features
 
-- **Real Market Data**: Fetches day-ahead, intraday, and imbalance market data from ENTSO-E Transparency Platform
-- **Weather Integration**: Incorporates KNMI weather data (temperature, wind speed, solar radiation)
-- **Multiple Models**: Compare persistence, linear regression, and random forest forecasting models
-- **Interactive UI**: Streamlit-based frontend for easy exploration
-- **FastAPI Backend**: RESTful API for forecasting services
-- **Automated Updates**: Daily data refresh at midnight (Europe/Amsterdam timezone)
+### Core Forecasting Capabilities
+- **Multiple Market Types**: Day-ahead, intraday, and imbalance market forecasting
+- **Three ML Models**: Compare Persistence, Linear Regression, and Random Forest models
+- **15-Minute Resolution**: High-granularity forecasts (96 intervals per 24-hour period)
+- **Historical Window**: Adjustable historical data display (24-168 hours) for context and RMSE calculation
+- **Model Performance**: Real-time RMSE scoring with data point counts
+
+### Advanced Features
+- **Granular Weather Controls**: Select specific weather features (temperature, wind speed, cloud cover, precipitation)
+- **Training Data Selection**: Choose market data sources for model training
+- **Interactive Visualizations**: Plotly-powered charts with historical data, forecasts, and actual prices
+- **Weather Data Overlay**: Toggle weather metrics on forecast charts
+- **Model Comparison**: Side-by-side comparison of all three models
+
+### Data Integration
+- **Demo Data**: Pre-loaded with 30,912+ market records and 31,056+ weather records (Jan 1 - Nov 18, 2025)
+- **Real-time Weather**: Extended 36 hours into the future for forecasting
+- **15-Minute Intervals**: Both market and weather data at quarter-hour resolution
 
 ## Target Audience
 
-Students and learners interested in understanding power market forecasting. The code prioritizes clarity and educational value over advanced ML techniques.
+Data scientists, energy market analysts, students, and professionals interested in power market forecasting and machine learning applications in the energy sector.
 
 ## Tech Stack
 
 - **Python 3.11**
-- **Backend**: FastAPI, scikit-learn, pandas, numpy
 - **Frontend**: Streamlit with Plotly visualizations
+- **ML Framework**: scikit-learn (LinearRegression, RandomForestRegressor)
+- **Data Processing**: pandas, numpy
 - **Data Sources**: ENTSO-E Transparency Platform, KNMI Open Data API
-- **Testing**: pytest
-- **Code Quality**: black formatter
+- **Testing**: pytest (205 tests, 100% passing)
+- **Deployment**: Streamlit Cloud
 
-## Setup
+## Quick Start
 
-### Prerequisites
+### Live Application
+Visit the deployed app: [https://energymarketforecastingproject.streamlit.app/](https://energymarketforecastingproject.streamlit.app/)
 
-- Python 3.11 or higher
-- ENTSO-E API key (register at https://transparency.entsoe.eu/)
-- KNMI API key (register at https://developer.dataplatform.knmi.nl/)
+### Local Development
 
-### Installation
-
-1. Clone the repository:
+1. **Clone the repository:**
 ```bash
-git clone <repository-url>
-cd Market_Forecasting_example
+git clone https://github.com/TyredMayfly/Energy_Market_Forecasting_project.git
+cd Energy_Market_Forecasting_project
 ```
 
-2. Create and activate a virtual environment:
+2. **Create and activate a virtual environment:**
 ```bash
-python -m venv venv
+python -m venv .venv
 # On Windows:
-venv\Scripts\activate
+.venv\Scripts\activate
 # On Linux/Mac:
-source venv/bin/activate
+source .venv/bin/activate
 ```
 
-3. Install dependencies:
+3. **Install dependencies:**
 ```bash
-pip install -e .
+pip install -r requirements.txt
 ```
 
-4. Create a `.env` file with your API keys:
-```bash
-cp .env.example .env
-# Edit .env and add your API keys
-```
-
-5. Initialize historical data (downloads 2025 data up to today):
-```bash
-python -m app.services.data_update_service --init
-```
-
-## Usage
-
-### Running the FastAPI Backend
-
-```bash
-uvicorn app.api.main:app --reload --port 8000
-```
-
-API will be available at http://localhost:8000
-- API docs: http://localhost:8000/docs
-- Health check: http://localhost:8000/health
-
-### Running the Streamlit Frontend
-
+4. **Run the Streamlit app:**
 ```bash
 streamlit run streamlit_app.py
 ```
 
-UI will be available at http://localhost:8501
+The app will be available at http://localhost:8501
 
-### Running Tests
+## Usage Guide
 
-```bash
-pytest
-```
+### Generating Forecasts
 
-### Code Formatting
+1. **Select Market Type**: Choose from day-ahead, intraday, or imbalance markets
+2. **Choose Model**: Pick Persistence (baseline), Linear Regression, or Random Forest
+3. **Set Forecast Horizon**: 6, 12, or 24 hours ahead
+4. **Adjust Historical Window**: View 24-168 hours of historical context
+5. **Configure Weather Features**: Toggle individual weather parameters for training
+6. **Compare Models**: Use "Compare All Models" to see performance differences
 
-```bash
-black .
-```
+### Understanding Results
+
+- **Price Statistics**: Mean, median, min/max prices with units in EUR/MWh
+- **RMSE Score**: Model accuracy measured on overlapping historical data
+- **Interactive Charts**: Zoom, pan, and hover for detailed price information
+- **Weather Overlay**: View correlation between weather and prices
 
 ## Project Structure
 
 ```
 /app
-  /api              # FastAPI routers and endpoints
-  /core             # Configuration, logging, utilities
-  /models           # Forecasting model implementations
-  /services         # Data fetchers, ETL, business logic
-/data               # Local data storage (CSV files)
-/tests              # pytest test suite
-/infra              # Docker, CI/CD configurations
-streamlit_app.py    # Streamlit UI entrypoint
-pyproject.toml      # Project dependencies and configuration
+  /core             # Configuration, logging (Pydantic v2)
+  /models           # ML model implementations (Persistence, LinearRegression, RandomForest)
+  /services         # Data loading, feature engineering, forecast generation
+/data               # Demo CSV files (30K+ records)
+  ├── entsoe_day_ahead_prices_2025.csv
+  ├── entsoe_intraday_prices_2025.csv
+  ├── entsoe_imbalance_data_2025.csv
+  └── knmi_weather_2025.csv
+/tests              # 205 pytest tests (unit + integration)
+  /unit             # Component-level tests
+  /integration      # End-to-end feature tests
+/.streamlit         # Streamlit Cloud configuration
+streamlit_app.py    # Main application entry point (602 lines)
+requirements.txt    # Production dependencies
+pyproject.toml      # Full project configuration
 ```
 
-## Data Sources
+## Data Sources & Format
 
 ### ENTSO-E Transparency Platform
-- **Day-Ahead Prices**: Document type A44
-- **Intraday Prices**: Document type A45
-- **Imbalance Data**: Document type A53
+- **Day-Ahead Prices**: Market clearing prices (EUR/MWh) at 15-minute intervals
+- **Intraday Prices**: Continuous intraday market prices at 15-minute intervals  
+- **Imbalance Data**: System imbalance volumes and prices at 15-minute intervals
 - **Bidding Zone**: Netherlands (10YNL----------L)
+- **Demo Period**: January 1 - November 18, 2025
 
-### KNMI Open Data Platform
-- **Dataset**: 10-minute or hourly meteorological observations
-- **Variables**: Temperature, wind speed, global radiation
+### KNMI Weather Data
+- **Resolution**: 15-minute meteorological observations
+- **Variables**: 
+  - Temperature (°C)
+  - Wind speed (m/s)
+  - Cloud cover (oktas)
+  - Precipitation (mm)
+  - Global radiation (W/m²) - derived from cloud cover
 - **Coverage**: Netherlands weather stations
+- **Future Extension**: Weather forecasts extended 36 hours ahead
 
 ## Forecasting Models
 
 ### 1. Persistence Model
-Simple baseline that assumes future prices equal recent observed values.
+Baseline model that assumes future prices equal the most recent observed value. Useful for establishing performance benchmarks.
 
 ### 2. Linear Regression
-Uses lagged prices, time features, and weather variables with sklearn's LinearRegression.
+Uses historical prices, time-based features (hour, day of week, weekend), and selected weather variables. Trained with sklearn's `LinearRegression`.
+
+**Features:**
+- Lag features: 1, 2, 3, 6, 12, 24 intervals (demo mode)
+- Rolling statistics: 24-interval mean and standard deviation
+- Cyclic time encoding: hour and day of week
+- Optional weather features based on user selection
 
 ### 3. Random Forest
-Ensemble model using sklearn's RandomForestRegressor with conservative parameters.
+Ensemble model using sklearn's `RandomForestRegressor` with 50 trees. Captures non-linear relationships between features and prices.
 
-## API Endpoints
+**Parameters:**
+- n_estimators: 50
+- max_depth: None (fully developed trees)
+- min_samples_split: 2
+- random_state: 42 (reproducible results)
 
-### POST /forecast
-Generate a price forecast for a specific market, model, and horizon.
+## Model Performance
 
-**Request Body:**
-```json
-{
-  "market_type": "day_ahead",
-  "model_type": "linear_regression",
-  "horizon_hours": 24
-}
-```
+All models include:
+- **RMSE Calculation**: Automatically computed on overlapping historical data
+- **Data Point Count**: Shows how many actual vs. forecast comparisons were made
+- **Historical Context**: Adjustable 24-168 hour window for visual comparison
+- **Cross-Model Comparison**: Side-by-side evaluation of all three models
 
-**Response:**
-```json
-{
-  "timestamps": ["2025-01-01T00:00:00Z", ...],
-  "forecasts": [45.2, 46.1, ...],
-  "market_type": "day_ahead",
-  "model_type": "linear_regression"
-}
-```
+## Testing
 
-## Automated Data Updates
-
-The system automatically updates data daily at 00:00 Europe/Amsterdam time using APScheduler. The update fetches the previous day's data from both ENTSO-E and KNMI and appends it to existing datasets.
-
-## Docker Support
-
-Build and run with Docker:
+### Run Tests
 
 ```bash
-docker build -t market-forecasting .
-docker run -p 8000:8000 --env-file .env market-forecasting
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=app --cov-report=html
+
+# Run specific test suite
+pytest tests/unit/
+pytest tests/integration/
 ```
 
-Or use docker-compose:
+### Test Coverage
 
+- **205 tests** covering all functionality
+- **Unit tests**: Model training, feature engineering, data loading, configuration
+- **Integration tests**: End-to-end forecasting, weather feature selection, model comparison
+- **Test features**: 15-minute resolution, historical windows, RMSE calculation, weather toggles
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file (optional, for API integration):
 ```bash
-docker-compose up
+ENTSOE_API_KEY=your_entsoe_key_here
+KNMI_API_KEY=your_knmi_key_here
 ```
+
+### Streamlit Configuration
+
+The app uses `.streamlit/config.toml` for:
+- Theme customization (blue primary color)
+- Server settings (headless mode for cloud deployment)
+- Browser preferences
+
+## Deployment
+
+The application is deployed on **Streamlit Cloud** with automatic updates:
+
+1. **Push to GitHub**: Changes pushed to the `main` branch trigger automatic redeployment
+2. **Build Process**: Streamlit Cloud installs dependencies from `requirements.txt`
+3. **Data Loading**: Demo CSV files are included in the repository for immediate availability
+4. **Live URL**: [https://energymarketforecastingproject.streamlit.app/](https://energymarketforecastingproject.streamlit.app/)
+
+### Manual Deployment
+
+To deploy your own instance:
+1. Fork this repository
+2. Sign up at [share.streamlit.io](https://share.streamlit.io/)
+3. Connect your GitHub account
+4. Select repository, branch (`main`), and main file (`streamlit_app.py`)
+5. Deploy!
 
 ## Contributing
 
-This is an educational project. Contributions that improve clarity, add documentation, or implement additional simple forecasting techniques are welcome.
+Contributions are welcome! Areas of interest:
+- Additional forecasting models (ARIMA, LSTM, XGBoost)
+- Enhanced feature engineering
+- Model hyperparameter optimization
+- Extended test coverage
+- Documentation improvements
+
+Please open an issue or pull request on GitHub.
 
 ## License
 
@@ -189,6 +238,14 @@ MIT License - See LICENSE file for details
 
 ## Acknowledgments
 
-- ENTSO-E for providing transparent power market data
-- KNMI for open meteorological data
-- The open-source Python data science community
+- **ENTSO-E** for transparent power market data access
+- **KNMI** for open meteorological data
+- **Streamlit** for the excellent deployment platform
+- The **Python data science community** for powerful open-source tools
+
+---
+
+**Repository**: [https://github.com/TyredMayfly/Energy_Market_Forecasting_project](https://github.com/TyredMayfly/Energy_Market_Forecasting_project)  
+**Live Demo**: [https://energymarketforecastingproject.streamlit.app/](https://energymarketforecastingproject.streamlit.app/)  
+**Python Version**: 3.11  
+**Last Updated**: November 2025
