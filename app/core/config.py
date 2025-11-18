@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 # Load environment variables from .env file
@@ -51,12 +52,11 @@ class Settings(BaseSettings):
     demo_lag_hours: int = 24  # Reduced lags for demo mode (24 hours)
     demo_min_training_samples: int = 48  # 2 days at hourly (or 12 hours at 15-min)
 
-    class Config:
-        """Pydantic configuration."""
-
-        env_file = ".env"
-        case_sensitive = False
-        extra = "ignore"
+    model_config = ConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
 
 # Global settings instance
