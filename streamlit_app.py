@@ -92,29 +92,26 @@ with st.sidebar.expander("Advanced Options"):
     # Granular weather feature selection (only shown if weather data is enabled)
     if use_weather_data:
         st.markdown("**Select Weather Features:**")
-        col1, col2 = st.columns(2)
-        with col1:
-            use_temperature = st.checkbox(
-                "Temperature",
-                value=True,
-                help="Include temperature data",
-            )
-            use_wind_speed = st.checkbox(
-                "Wind Speed",
-                value=True,
-                help="Include wind speed data",
-            )
-        with col2:
-            use_cloud_cover = st.checkbox(
-                "Cloud Cover",
-                value=True,
-                help="Include cloud cover data",
-            )
-            use_precipitation = st.checkbox(
-                "Precipitation",
-                value=True,
-                help="Include precipitation data",
-            )
+        use_temperature = st.checkbox(
+            "Temperature",
+            value=True,
+            help="Include temperature data",
+        )
+        use_wind_speed = st.checkbox(
+            "Wind Speed",
+            value=True,
+            help="Include wind speed data",
+        )
+        use_cloud_cover = st.checkbox(
+            "Cloud Cover",
+            value=True,
+            help="Include cloud cover data",
+        )
+        use_precipitation = st.checkbox(
+            "Precipitation",
+            value=True,
+            help="Include precipitation data",
+        )
     else:
         # Default values when weather is disabled
         use_temperature = False
@@ -150,7 +147,7 @@ with st.sidebar.expander("Advanced Options"):
     )
 
 # Forecast button
-run_forecast = st.sidebar.button("🚀 Run Forecast", type="primary", use_container_width=True)
+run_forecast = st.sidebar.button("🚀 Run Forecast", type="primary", width="stretch")
 
 # Data summary in sidebar
 with st.sidebar.expander("📊 Data Summary"):
@@ -233,6 +230,7 @@ if run_forecast:
                 market_type=market_type,
                 model_types=model_types_to_compare,
                 horizon_hours=horizon_hours,
+                historical_window_hours=24,  # Include 24h historical window for RMSE
                 training_config=training_config,
             )
         else:
@@ -241,6 +239,7 @@ if run_forecast:
                 market_type=market_type,
                 model_type=model_type,
                 horizon_hours=horizon_hours,
+                historical_window_hours=24,  # Include 24h historical window for RMSE
                 training_config=training_config,
             )
 
@@ -458,32 +457,34 @@ if run_forecast:
                                         yaxis="y2",
                                         fill="tozeroy",
                                         fillcolor="rgba(0, 0, 255, 0.1)",
-                                    )
                                 )
+                            )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
                 # Statistics
+                st.subheader("Forecast Statistics")
                 col1, col2, col3, col4 = st.columns(4)
 
                 with col1:
                     mean_price = df_forecast["forecast_price_eur_per_mwh"].mean()
-                    st.metric("Mean Forecast Price", f"{mean_price:.2f} EUR/MWh")
+                    st.metric("Mean Price", f"{mean_price:.2f}", help="EUR/MWh")
 
                 with col2:
                     min_price = df_forecast["forecast_price_eur_per_mwh"].min()
-                    st.metric("Minimum Price", f"{min_price:.2f} EUR/MWh")
+                    st.metric("Min Price", f"{min_price:.2f}", help="EUR/MWh")
 
                 with col3:
                     max_price = df_forecast["forecast_price_eur_per_mwh"].max()
-                    st.metric("Maximum Price", f"{max_price:.2f} EUR/MWh")
+                    st.metric("Max Price", f"{max_price:.2f}", help="EUR/MWh")
                     
                 with col4:
                     # Calculate RMSE if historical data is available
-                    rmse = service.calculate_forecast_rmse(df_forecast, market_type)
-                    if rmse is not None:
-                        st.metric("RMSE", f"{rmse:.2f} EUR/MWh", 
-                                 help="Root Mean Squared Error against actual historical data")
+                    rmse_result = service.calculate_forecast_rmse(df_forecast, market_type)
+                    if rmse_result is not None:
+                        rmse, n_points = rmse_result
+                        st.metric("RMSE", f"{rmse:.2f}", 
+                                 help=f"Root Mean Squared Error (EUR/MWh) calculated on {n_points} data points (includes historical window and any available future data)")
                     else:
                         st.metric("RMSE", "N/A", 
                                  help="No historical data available for comparison")
@@ -503,7 +504,7 @@ if run_forecast:
 
                 st.dataframe(
                     df_display,
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
 

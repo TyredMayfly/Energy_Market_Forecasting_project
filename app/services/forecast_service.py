@@ -176,6 +176,7 @@ class ForecastService:
         model_type: str,
         horizon_hours: int,
         forecast_start: Optional[datetime] = None,
+        historical_window_hours: int = 0,
         training_config: Optional[TrainingDataConfig] = None,
     ) -> Optional[pd.DataFrame]:
         """
@@ -186,6 +187,7 @@ class ForecastService:
             model_type: Type of model
             horizon_hours: Number of hours to forecast ahead
             forecast_start: Starting timestamp for forecast (default: now)
+            historical_window_hours: Number of hours to include before forecast_start (for RMSE calculation)
             training_config: Configuration for which data sources to use
 
         Returns:
@@ -218,6 +220,7 @@ class ForecastService:
         logger.info(
             f"Generating {horizon_hours}h forecast for {market_type} "
             f"using {model_type} starting from {forecast_start}"
+            f"{f' with {historical_window_hours}h historical window' if historical_window_hours > 0 else ''}"
         )
 
         # Ensure model is trained with the specified configuration
@@ -243,6 +246,30 @@ class ForecastService:
                     'precipitation': training_config.use_precipitation,
                 }
             
+            all_forecasts = []
+            
+            # Generate historical window forecast if requested
+            if historical_window_hours > 0:
+                historical_start = forecast_start - pd.Timedelta(hours=historical_window_hours)
+                X_historical = build_forecast_features(
+                    market_type=market_type,
+                    forecast_start=historical_start,
+                    horizon_hours=historical_window_hours,
+                    include_weather=training_config.use_weather_data,
+                    weather_features=weather_features,
+                )
+                if not X_historical.empty:
+                    predictions_historical = model.predict(X_historical)
+                    df_historical = pd.DataFrame(
+                        {
+                            "timestamp_utc": X_historical["timestamp_utc"],
+                            "forecast_price_eur_per_mwh": predictions_historical,
+                            "model_type": model_type,
+                            "market_type": market_type,
+                        }
+                    )
+                    all_forecasts.append(df_historical)
+            
             # Build forecast features using same config as training
             X_forecast = build_forecast_features(
                 market_type=market_type,
@@ -259,8 +286,8 @@ class ForecastService:
             # Generate predictions
             predictions = model.predict(X_forecast)
 
-            # Build result DataFrame
-            result_df = pd.DataFrame(
+            # Build result DataFrame for future forecast
+            df_future = pd.DataFrame(
                 {
                     "timestamp_utc": X_forecast["timestamp_utc"],
                     "forecast_price_eur_per_mwh": predictions,
@@ -268,6 +295,10 @@ class ForecastService:
                     "market_type": market_type,
                 }
             )
+            all_forecasts.append(df_future)
+            
+            # Combine historical and future forecasts
+            result_df = pd.concat(all_forecasts, ignore_index=True)
 
             logger.info(f"Generated {len(result_df)} forecast values")
 
@@ -281,7 +312,7 @@ class ForecastService:
         self,
         forecast_df: pd.DataFrame,
         market_type: str,
-    ) -> Optional[float]:
+    ) -> Optional[tuple[float, int]]:
         """
         Calculate RMSE for a forecast against actual historical data.
         
@@ -290,7 +321,7 @@ class ForecastService:
             market_type: Type of market to get actual data for
             
         Returns:
-            RMSE value or None if no overlap with historical data
+            Tuple of (RMSE value, number of data points) or None if no overlap with historical data
         """
         from app.services.data_store import load_market_data
         import numpy as np
@@ -321,10 +352,11 @@ class ForecastService:
         # Calculate RMSE
         squared_errors = (merged["forecast_price_eur_per_mwh"] - merged[price_column]) ** 2
         rmse = np.sqrt(squared_errors.mean())
+        n_points = len(merged)
         
-        logger.info(f"RMSE calculated on {len(merged)} overlapping points: {rmse:.2f}")
+        logger.info(f"RMSE calculated on {n_points} overlapping points: {rmse:.2f}")
         
-        return rmse
+        return (rmse, n_points)
 
     def compare_models(
         self,
@@ -332,6 +364,7 @@ class ForecastService:
         model_types: list,
         horizon_hours: int,
         forecast_start: Optional[datetime] = None,
+        historical_window_hours: int = 0,
         training_config: Optional[TrainingDataConfig] = None,
     ) -> Optional[pd.DataFrame]:
         """
@@ -342,6 +375,7 @@ class ForecastService:
             model_types: List of model types to compare
             horizon_hours: Number of hours to forecast
             forecast_start: Starting timestamp for forecast
+            historical_window_hours: Number of hours to include before forecast_start (for RMSE calculation)
             training_config: Configuration for which data sources to use
 
         Returns:
@@ -355,6 +389,7 @@ class ForecastService:
                 model_type=model_type,
                 horizon_hours=horizon_hours,
                 forecast_start=forecast_start,
+                historical_window_hours=historical_window_hours,
                 training_config=training_config,
             )
 
