@@ -131,7 +131,7 @@ with st.sidebar.expander("Advanced Options"):
         min_value=24,
         max_value=168,
         value=72,
-        help="Number of hours of historical data to show",
+        help="Number of hours of historical data to include in forecast (for chart display and RMSE calculation)",
     )
     
     show_training_data = st.checkbox(
@@ -230,7 +230,7 @@ if run_forecast:
                 market_type=market_type,
                 model_types=model_types_to_compare,
                 horizon_hours=horizon_hours,
-                historical_window_hours=24,  # Include 24h historical window for RMSE
+                historical_window_hours=historical_hours,
                 training_config=training_config,
             )
         else:
@@ -239,7 +239,7 @@ if run_forecast:
                 market_type=market_type,
                 model_type=model_type,
                 horizon_hours=horizon_hours,
-                historical_window_hours=24,  # Include 24h historical window for RMSE
+                historical_window_hours=historical_hours,
                 training_config=training_config,
             )
 
@@ -293,12 +293,19 @@ if run_forecast:
                                 df_historical["timestamp_utc"], utc=True
                             )
                         
-                        # Get recent historical data
-                        cutoff_time = df_forecast["timestamp_utc"].min() - timedelta(
+                        # Calculate actual forecast start time (df_forecast.min is already historical_hours back)
+                        # So the forecast start is historical_hours forward from df_forecast.min
+                        forecast_start_time = df_forecast["timestamp_utc"].min() + timedelta(
+                            hours=historical_hours
+                        )
+                        
+                        # Get recent historical data (before forecast start)
+                        cutoff_time = forecast_start_time - timedelta(
                             hours=historical_hours
                         )
                         df_recent = df_historical[
-                            df_historical["timestamp_utc"] >= cutoff_time
+                            (df_historical["timestamp_utc"] >= cutoff_time) &
+                            (df_historical["timestamp_utc"] < forecast_start_time)
                         ].copy()
                         
                         # If showing training data, exclude it from historical to avoid overlap
@@ -483,8 +490,10 @@ if run_forecast:
                     rmse_result = service.calculate_forecast_rmse(df_forecast, market_type)
                     if rmse_result is not None:
                         rmse, n_points = rmse_result
+                        # Calculate hours covered by actual overlapping data
+                        hours_covered = n_points / 4
                         st.metric("RMSE", f"{rmse:.2f}", 
-                                 help=f"Root Mean Squared Error (EUR/MWh) calculated on {n_points} data points (includes historical window and any available future data)")
+                                 help=f"Root Mean Squared Error (EUR/MWh) calculated on {n_points} data points ({hours_covered:.1f} hours at 15-min intervals). Primarily based on {historical_hours}h historical window where actual data exists for comparison.")
                     else:
                         st.metric("RMSE", "N/A", 
                                  help="No historical data available for comparison")
