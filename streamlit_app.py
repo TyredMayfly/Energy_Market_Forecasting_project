@@ -280,7 +280,7 @@ def get_forecast_configuration() -> Optional[Dict]:
             run_forecast = st.button(
                 "🚀 Run Forecast",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 help="Generate forecast with current configuration"
             )
     
@@ -645,7 +645,7 @@ def render_results_section(
         historical_df,
         training_df
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     
     # === Forecast Statistics ===
     st.subheader("📊 Forecast Statistics")
@@ -684,7 +684,7 @@ def render_results_section(
         df_display["timestamp_utc"] = df_display["timestamp_utc"].dt.strftime("%Y-%m-%d %H:%M")
         df_display["forecast_price_eur_per_mwh"] = df_display["forecast_price_eur_per_mwh"].round(2)
         
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
+        st.dataframe(df_display, width="stretch", hide_index=True)
         
         # Download button
         csv = df_display.to_csv(index=False)
