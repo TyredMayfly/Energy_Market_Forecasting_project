@@ -18,10 +18,14 @@ from app.core.logging import get_logger
 from app.models.linear_regression_model import LinearRegressionPriceModel
 from app.models.persistence_model import PersistencePriceModel
 from app.models.random_forest_model import RandomForestPriceModel
+from app.models.xgboost_classifier import RegulationStateXGBModel
+from app.services.data_store import load_market_data
 from app.services.feature_engineering import (
     build_features_and_target,
     build_forecast_features,
 )
+from app.services.weather_data_manager import get_weather_manager
+from app.services.entsoe_data_updater import check_and_update_day_ahead_data
 
 logger = get_logger(__name__)
 
@@ -29,7 +33,7 @@ logger = get_logger(__name__)
 @dataclass
 class TrainingDataConfig:
     """Configuration for which data sources to use in model training."""
-    
+
     use_weather_data: bool = True
     use_time_features: bool = True
     # Granular weather feature selection
@@ -51,12 +55,50 @@ class ForecastService:
         """Initialize the forecast service."""
         self.trained_models: Dict[str, Dict[str, any]] = {}
 
-    def _get_model_instance(self, model_type: str):
+    def _validate_model_market_compatibility(self, market_type: str, model_type: str) -> None:
+        """
+        Validate that the model type is compatible with the market type.
+
+        Args:
+            market_type: Type of market
+            model_type: Type of model
+
+        Raises:
+            ValueError: If the model-market combination is invalid
+        """
+        if market_type not in MARKET_TYPES:
+            raise ValueError(f"Unknown market type: {market_type}")
+
+        if model_type not in MODEL_TYPES:
+            raise ValueError(f"Unknown model type: {model_type}")
+
+        market_config = MARKET_TYPES[market_type]
+        target_type = market_config.get("target_type", "regression")
+
+        # Define which models support which target types
+        regression_models = {"persistence", "linear_regression", "random_forest"}
+        classification_models = {"xgboost_classifier"}
+
+        if target_type == "classification":
+            if model_type not in classification_models:
+                raise ValueError(
+                    f"Model '{model_type}' cannot be used for classification target '{market_type}'. "
+                    f"Use one of: {', '.join(classification_models)}"
+                )
+        elif target_type == "regression":
+            if model_type not in regression_models:
+                raise ValueError(
+                    f"Model '{model_type}' cannot be used for regression target '{market_type}'. "
+                    f"Use one of: {', '.join(regression_models)}"
+                )
+
+    def _get_model_instance(self, model_type: str, market_type: str = None):
         """
         Create a model instance based on type.
 
         Args:
-            model_type: Type of model ('persistence', 'linear_regression', 'random_forest')
+            model_type: Type of model
+            market_type: Type of market (needed for classification models)
 
         Returns:
             Model instance
@@ -67,20 +109,29 @@ class ForecastService:
             return LinearRegressionPriceModel()
         elif model_type == "random_forest":
             return RandomForestPriceModel()
+        elif model_type == "xgboost_classifier":
+            return RegulationStateXGBModel()
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
-    def _get_model_key(self, market_type: str, model_type: str, training_config: Optional[TrainingDataConfig] = None) -> str:
+    def _get_model_key(
+        self,
+        market_type: str,
+        model_type: str,
+        training_config: Optional[TrainingDataConfig] = None,
+    ) -> str:
         """
         Get cache key for a trained model.
-        
+
         Includes training configuration to ensure models trained with different data sources are cached separately.
         """
         if training_config is None:
             training_config = TrainingDataConfig()
-        
+
         # Create suffix from all config options
-        config_suffix = f"_w{int(training_config.use_weather_data)}_t{int(training_config.use_time_features)}"
+        config_suffix = (
+            f"_w{int(training_config.use_weather_data)}_t{int(training_config.use_time_features)}"
+        )
         if training_config.use_weather_data:
             # Add weather feature selections to cache key
             config_suffix += f"_T{int(training_config.use_temperature)}"
@@ -110,7 +161,14 @@ class ForecastService:
         """
         if training_config is None:
             training_config = TrainingDataConfig()
-        
+
+        # Validate model-market compatibility
+        try:
+            self._validate_model_market_compatibility(market_type, model_type)
+        except ValueError as e:
+            logger.error(str(e))
+            return False
+
         model_key = self._get_model_key(market_type, model_type, training_config)
 
         # Check if already trained
@@ -118,19 +176,21 @@ class ForecastService:
             logger.info(f"Using cached model: {model_key}")
             return True
 
-        logger.info(f"Training {model_type} for {market_type} (weather={training_config.use_weather_data})")
+        logger.info(
+            f"Training {model_type} for {market_type} (weather={training_config.use_weather_data})"
+        )
 
         try:
             # Build weather features dict from config
             weather_features = None
             if training_config.use_weather_data:
                 weather_features = {
-                    'temperature': training_config.use_temperature,
-                    'wind_speed': training_config.use_wind_speed,
-                    'cloud_cover': training_config.use_cloud_cover,
-                    'precipitation': training_config.use_precipitation,
+                    "temperature": training_config.use_temperature,
+                    "wind_speed": training_config.use_wind_speed,
+                    "cloud_cover": training_config.use_cloud_cover,
+                    "precipitation": training_config.use_precipitation,
                 }
-            
+
             # Build features and target with specified data sources
             X, y = build_features_and_target(
                 market_type=market_type,
@@ -142,26 +202,48 @@ class ForecastService:
                 logger.error(f"No data available for training {market_type}")
                 return False
 
-            # Check minimum samples (use demo mode threshold if enabled)
-            min_samples = settings.demo_min_training_samples if settings.demo_mode else settings.min_training_samples
-            if len(X) < min_samples:
+            # Check minimum samples required for training
+            if len(X) < settings.min_training_samples:
                 logger.warning(
                     f"Insufficient training samples for {market_type}: "
-                    f"{len(X)} < {min_samples}"
+                    f"{len(X)} < {settings.min_training_samples}"
                 )
-                # Continue anyway for demonstration
+                # Continue anyway to allow forecasting with limited data
 
             # Create and train model
-            model = self._get_model_instance(model_type)
+            model = self._get_model_instance(model_type, market_type)
             model.fit(X, y)
 
-            # Cache the trained model
-            self.trained_models[model_key] = {
+            # Cache the trained model with metadata
+            feature_columns = [col for col in X.columns if col != "timestamp_utc"]
+            model_metadata = {
                 "model": model,
                 "trained_at": datetime.utcnow(),
                 "n_samples": len(X),
-                "feature_columns": [col for col in X.columns if col != "timestamp_utc"],
+                "feature_columns": feature_columns,
             }
+
+            # Add model-specific metadata
+            if model_type == "random_forest":
+                # Extract feature importance
+                if hasattr(model, "model_") and hasattr(model.model_, "feature_importances_"):
+                    importances = model.model_.feature_importances_
+                    # Sort by importance
+                    indices = importances.argsort()[::-1]
+                    model_metadata["feature_importance"] = {
+                        "features": [feature_columns[i] for i in indices],
+                        "importance": [float(importances[i]) for i in indices],
+                    }
+
+            elif model_type == "linear_regression":
+                # Extract coefficients
+                if hasattr(model, "model_"):
+                    if hasattr(model.model_, "coef_"):
+                        model_metadata["coefficients"] = [float(c) for c in model.model_.coef_]
+                    if hasattr(model.model_, "intercept_"):
+                        model_metadata["intercept"] = float(model.model_.intercept_)
+
+            self.trained_models[model_key] = model_metadata
 
             logger.info(f"Successfully trained {model_key} with {len(X)} samples")
             return True
@@ -195,7 +277,32 @@ class ForecastService:
         """
         if training_config is None:
             training_config = TrainingDataConfig()
-        
+
+        # Update weather forecast if needed (smart caching - only updates if > 1 hour old)
+        if training_config.use_weather_data:
+            try:
+                weather_manager = get_weather_manager()
+                updated = weather_manager.update_weather_data(force=False)
+                if updated:
+                    logger.info("✓ Weather forecast updated with latest 24-hour data")
+                else:
+                    logger.debug("✓ Weather forecast is current, no update needed")
+            except Exception as e:
+                logger.warning(f"Could not update weather forecast: {e}")
+                logger.warning("Proceeding with existing weather data")
+
+        # Update day-ahead market data if needed (smart caching - only updates if > 12 hours old)
+        if market_type == "day_ahead":
+            try:
+                updated = check_and_update_day_ahead_data(max_age_hours=12.0, force=False)
+                if updated:
+                    logger.info("✓ Day-ahead market data updated with latest ENTSO-E data")
+                else:
+                    logger.debug("✓ Day-ahead market data is current, no update needed")
+            except Exception as e:
+                logger.warning(f"Could not update day-ahead market data: {e}")
+                logger.warning("Proceeding with existing market data")
+
         # Validate inputs
         if market_type not in MARKET_TYPES:
             logger.error(f"Invalid market type: {market_type}")
@@ -212,10 +319,24 @@ class ForecastService:
             )
             return None
 
+        # Determine forecast start time
         if forecast_start is None:
-            forecast_start = pd.Timestamp.utcnow().floor("h")
+            # Use the last available data point as the forecast start to avoid gaps
+            df_market = load_market_data(market_type)
+            if df_market is not None and not df_market.empty:
+                # Get the most recent timestamp from actual data
+                last_data_time = df_market["timestamp_utc"].max()
+                # Forecast starts from the next interval (15 minutes after last data)
+                forecast_start = last_data_time + pd.Timedelta(minutes=15)
+                logger.info(
+                    f"Using last available data point as forecast start: {last_data_time} -> {forecast_start}"
+                )
+            else:
+                # Fallback to current time if no data available
+                forecast_start = pd.Timestamp.utcnow().floor("15min")
+                logger.warning("No historical data found, using current time as forecast start")
         else:
-            forecast_start = pd.Timestamp(forecast_start).floor("h")
+            forecast_start = pd.Timestamp(forecast_start)
 
         logger.info(
             f"Generating {horizon_hours}h forecast for {market_type} "
@@ -240,14 +361,14 @@ class ForecastService:
             weather_features = None
             if training_config.use_weather_data:
                 weather_features = {
-                    'temperature': training_config.use_temperature,
-                    'wind_speed': training_config.use_wind_speed,
-                    'cloud_cover': training_config.use_cloud_cover,
-                    'precipitation': training_config.use_precipitation,
+                    "temperature": training_config.use_temperature,
+                    "wind_speed": training_config.use_wind_speed,
+                    "cloud_cover": training_config.use_cloud_cover,
+                    "precipitation": training_config.use_precipitation,
                 }
-            
+
             all_forecasts = []
-            
+
             # Generate historical window forecast if requested
             if historical_window_hours > 0:
                 historical_start = forecast_start - pd.Timedelta(hours=historical_window_hours)
@@ -269,7 +390,7 @@ class ForecastService:
                         }
                     )
                     all_forecasts.append(df_historical)
-            
+
             # Build forecast features using same config as training
             X_forecast = build_forecast_features(
                 market_type=market_type,
@@ -296,7 +417,7 @@ class ForecastService:
                 }
             )
             all_forecasts.append(df_future)
-            
+
             # Combine historical and future forecasts
             result_df = pd.concat(all_forecasts, ignore_index=True)
 
@@ -307,7 +428,7 @@ class ForecastService:
         except Exception as e:
             logger.error(f"Error generating forecast: {e}")
             return None
-    
+
     def calculate_forecast_rmse(
         self,
         forecast_df: pd.DataFrame,
@@ -315,47 +436,45 @@ class ForecastService:
     ) -> Optional[tuple[float, int]]:
         """
         Calculate RMSE for a forecast against actual historical data.
-        
+
         Args:
             forecast_df: DataFrame with forecast predictions
             market_type: Type of market to get actual data for
-            
+
         Returns:
             Tuple of (RMSE value, number of data points) or None if no overlap with historical data
         """
         from app.services.data_store import load_market_data
         import numpy as np
-        
+
         # Load actual market data
         df_actual = load_market_data(market_type)
         if df_actual is None or df_actual.empty:
             return None
-            
-        price_column = MARKET_TYPES[market_type]["price_column"]
-        
+
+        target_column = MARKET_TYPES[market_type]["target_column"]
+
         # Ensure timezone aware
         if df_actual["timestamp_utc"].dt.tz is None:
             df_actual["timestamp_utc"] = pd.to_datetime(df_actual["timestamp_utc"], utc=True)
         if forecast_df["timestamp_utc"].dt.tz is None:
             forecast_df["timestamp_utc"] = pd.to_datetime(forecast_df["timestamp_utc"], utc=True)
-        
+
         # Merge on timestamp to find overlapping data
         merged = forecast_df.merge(
-            df_actual[["timestamp_utc", price_column]],
-            on="timestamp_utc",
-            how="inner"
+            df_actual[["timestamp_utc", target_column]], on="timestamp_utc", how="inner"
         )
-        
+
         if merged.empty:
             return None
-            
+
         # Calculate RMSE
-        squared_errors = (merged["forecast_price_eur_per_mwh"] - merged[price_column]) ** 2
+        squared_errors = (merged["forecast_price_eur_per_mwh"] - merged[target_column]) ** 2
         rmse = np.sqrt(squared_errors.mean())
         n_points = len(merged)
-        
+
         logger.info(f"RMSE calculated on {n_points} overlapping points: {rmse:.2f}")
-        
+
         return (rmse, n_points)
 
     def compare_models(
@@ -407,7 +526,12 @@ class ForecastService:
 
         return df_combined
 
-    def get_model_info(self, market_type: str, model_type: str, training_config: Optional[TrainingDataConfig] = None) -> Optional[dict]:
+    def get_model_info(
+        self,
+        market_type: str,
+        model_type: str,
+        training_config: Optional[TrainingDataConfig] = None,
+    ) -> Optional[dict]:
         """
         Get information about a trained model.
 
@@ -437,30 +561,30 @@ class ForecastService:
     ) -> Optional[pd.DataFrame]:
         """
         Get the training data that was used (or would be used) for a model.
-        
+
         Args:
             market_type: Type of market
             model_type: Type of model
             training_config: Configuration for which data sources to use
-            
+
         Returns:
             DataFrame with training data (timestamp_utc and price) or None
         """
         if training_config is None:
             training_config = TrainingDataConfig()
-        
+
         from app.services.data_store import load_market_data
-        
+
         # Load market data
         df = load_market_data(market_type)
         if df is None or df.empty:
             return None
-        
-        # Get price column
-        price_column = MARKET_TYPES[market_type]["price_column"]
-        
-        # Return timestamp and price only
-        return df[["timestamp_utc", price_column]].copy()
+
+        # Get target column
+        target_column = MARKET_TYPES[market_type]["target_column"]
+
+        # Return timestamp and target only
+        return df[["timestamp_utc", target_column]].copy()
 
 
 # Global forecast service instance

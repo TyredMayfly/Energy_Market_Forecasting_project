@@ -6,8 +6,7 @@ ENTSO-E Transparency Platform for the Netherlands bidding zone.
 
 Supports:
 - Day-ahead market prices (document type A44)
-- Intraday market prices (document type A45)
-- Imbalance-related data (document type A53)
+- Imbalance prices (document type A85)
 """
 
 from datetime import datetime, timedelta
@@ -40,9 +39,10 @@ class EntsoeClient:
         if api_key is None and not self.api_key:
             raise ValueError("ENTSO-E API key is required. Set ENTSOE_API_KEY in .env file.")
 
-        # XML namespaces used in ENTSO-E responses
+        # XML namespaces used in ENTSO-E responses (support both versions)
         self.namespaces = {
-            "ns": "urn:iec62325.351:tc57wg16:451-3:publicationdocument:7:0",
+            "ns": "urn:iec62325.351:tc57wg16:451-3:publicationdocument:7:3",
+            "ns0": "urn:iec62325.351:tc57wg16:451-3:publicationdocument:7:0",  # Legacy
         }
 
     def _build_query_url(
@@ -103,19 +103,30 @@ class EntsoeClient:
 
         records = []
 
+        # Try to find TimeSeries with both namespace versions
+        timeseries_list = root.findall(".//ns:TimeSeries", self.namespaces)
+        if not timeseries_list:
+            timeseries_list = root.findall(".//ns0:TimeSeries", self.namespaces)
+
         # Find all TimeSeries elements
-        for timeseries in root.findall(".//ns:TimeSeries", self.namespaces):
-            # Get the period
+        for timeseries in timeseries_list:
+            # Determine which namespace prefix to use
             period = timeseries.find(".//ns:Period", self.namespaces)
+            if period is None:
+                period = timeseries.find(".//ns0:Period", self.namespaces)
+                ns_prefix = "ns0"
+            else:
+                ns_prefix = "ns"
+
             if period is None:
                 continue
 
             # Get time interval start
-            time_interval = period.find("ns:timeInterval", self.namespaces)
+            time_interval = period.find(f"{ns_prefix}:timeInterval", self.namespaces)
             if time_interval is None:
                 continue
 
-            start_elem = time_interval.find("ns:start", self.namespaces)
+            start_elem = time_interval.find(f"{ns_prefix}:start", self.namespaces)
             if start_elem is None or start_elem.text is None:
                 continue
 
@@ -123,7 +134,7 @@ class EntsoeClient:
             period_start = pd.to_datetime(start_elem.text)
 
             # Get resolution (e.g., PT60M for 60 minutes)
-            resolution_elem = period.find("ns:resolution", self.namespaces)
+            resolution_elem = period.find(f"{ns_prefix}:resolution", self.namespaces)
             if resolution_elem is None or resolution_elem.text is None:
                 resolution_minutes = 60  # Default to hourly
             else:
@@ -135,9 +146,9 @@ class EntsoeClient:
                     resolution_minutes = 60
 
             # Parse all points
-            for point in period.findall("ns:Point", self.namespaces):
-                position_elem = point.find("ns:position", self.namespaces)
-                price_elem = point.find("ns:price.amount", self.namespaces)
+            for point in period.findall(f"{ns_prefix}:Point", self.namespaces):
+                position_elem = point.find(f"{ns_prefix}:position", self.namespaces)
+                price_elem = point.find(f"{ns_prefix}:price.amount", self.namespaces)
 
                 if position_elem is None or price_elem is None:
                     continue
@@ -167,6 +178,7 @@ class EntsoeClient:
         df = df.sort_values("timestamp_utc").reset_index(drop=True)
 
         logger.info(f"Parsed {len(df)} {market_type} price records")
+        return df
         return df
 
     def _fetch_data(
@@ -212,7 +224,7 @@ class EntsoeClient:
 
             except requests.exceptions.HTTPError as e:
                 logger.error(f"HTTP error fetching {market_type} data: {e}")
-                if hasattr(e, 'response') and e.response and e.response.status_code == 429:
+                if hasattr(e, "response") and e.response and e.response.status_code == 429:
                     logger.warning("Rate limit hit, waiting before retry...")
                     import time
 
@@ -257,47 +269,37 @@ class EntsoeClient:
         logger.info("Fetching day-ahead prices for Netherlands")
         return self._fetch_data("A44", "day_ahead", start_date, end_date)
 
-    def fetch_intraday_prices_2025_nl(
-        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
-    ) -> pd.DataFrame:
-        """
-        Fetch intraday market prices for the Netherlands in 2025.
-
-        Args:
-            start_date: Start date (default: 2025-01-01)
-            end_date: End date (default: today)
-
-        Returns:
-            DataFrame with intraday prices
-        """
-        if start_date is None:
-            start_date = datetime(2025, 1, 1, 0, 0, 0)
-        if end_date is None:
-            end_date = datetime.utcnow()
-
-        logger.info("Fetching intraday prices for Netherlands")
-        return self._fetch_data("A45", "intraday", start_date, end_date)
-
     def fetch_imbalance_data_2025_nl(
         self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
     ) -> pd.DataFrame:
         """
-        Fetch imbalance-related data for the Netherlands in 2025.
-
-        Note: Document type A53 may contain various imbalance-related information.
-        Check ENTSO-E documentation for exact interpretation.
+        Fetch imbalance prices for the Netherlands in 2025.
 
         Args:
             start_date: Start date (default: 2025-01-01)
             end_date: End date (default: today)
 
         Returns:
-            DataFrame with imbalance data
+            DataFrame with imbalance prices (document type A85)
         """
         if start_date is None:
             start_date = datetime(2025, 1, 1, 0, 0, 0)
         if end_date is None:
             end_date = datetime.utcnow()
 
-        logger.info("Fetching imbalance data for Netherlands")
-        return self._fetch_data("A53", "imbalance", start_date, end_date)
+        logger.info("Fetching imbalance prices for Netherlands")
+        return self._fetch_data("A85", "imbalance", start_date, end_date)
+
+
+def get_default_entsoe_client() -> EntsoeClient:
+    """
+    Get a default ENTSO-E client using settings from config.
+
+    Returns:
+        Configured EntsoeClient instance
+
+    Example:
+        >>> client = get_default_entsoe_client()
+        >>> df = client.fetch_day_ahead_prices_2025_nl()
+    """
+    return EntsoeClient()

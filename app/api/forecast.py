@@ -26,7 +26,7 @@ class ForecastRequest(BaseModel):
     market_type: str = Field(
         ...,
         description="Type of market",
-        examples=["day_ahead", "intraday", "imbalance"],
+        examples=["day_ahead", "imbalance_shortage", "imbalance_surplus", "regulation_state"],
     )
     model_type: str = Field(
         ...,

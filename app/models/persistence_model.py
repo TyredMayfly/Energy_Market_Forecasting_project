@@ -51,7 +51,9 @@ class PersistencePriceModel:
         self.last_value_ = y.iloc[-1]
         self.historical_data_ = y.copy()
 
-        logger.info(f"Persistence model fitted with {len(y)} samples, last value: {self.last_value_:.2f}")
+        logger.info(
+            f"Persistence model fitted with {len(y)} samples, last value: {self.last_value_:.2f}"
+        )
 
         return self
 

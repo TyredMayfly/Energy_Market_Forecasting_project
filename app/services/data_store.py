@@ -121,7 +121,7 @@ def save_weather_data(df: pd.DataFrame) -> bool:
     Save weather data DataFrame to CSV.
 
     Args:
-        df: DataFrame with weather data
+        df: DataFrame with weather data (timestamp as index)
 
     Returns:
         True if successful, False otherwise
@@ -130,12 +130,13 @@ def save_weather_data(df: pd.DataFrame) -> bool:
     filepath = get_data_path(filename)
 
     try:
-        # Ensure timestamp column is in proper format
-        if "timestamp_utc" in df.columns:
-            df = df.copy()
-            df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"])
+        # Ensure index is properly named
+        df_to_save = df.copy()
+        if df_to_save.index.name != "timestamp":
+            df_to_save.index.name = "timestamp"
 
-        df.to_csv(filepath, index=False)
+        # Save with timestamp as index
+        df_to_save.to_csv(filepath, index=True)
         logger.info(f"Saved {len(df)} weather records to {filepath}")
         return True
     except Exception as e:
@@ -158,21 +159,23 @@ def load_weather_data() -> Optional[pd.DataFrame]:
         return None
 
     try:
-        df = pd.read_csv(filepath)
+        df = pd.read_csv(
+            filepath, parse_dates=["timestamp"], index_col="timestamp", date_format="ISO8601"
+        )
 
-        # Parse timestamp column
+        # For backward compatibility with old format
         if "timestamp_utc" in df.columns:
             df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"])
-        
+
         # Rename columns to match expected format (support both old and new column names)
         column_mapping = {
             "temperature_celsius": "temperature_deg_c",
             "wind_speed_ms": "wind_speed_m_per_s",
             "cloud_cover_oktas": "cloud_cover_oktas",
-            "precipitation_mm": "precipitation_mm"
+            "precipitation_mm": "precipitation_mm",
         }
         df = df.rename(columns=column_mapping)
-        
+
         # For backward compatibility, if global_radiation doesn't exist, use cloud_cover as proxy
         if "global_radiation_w_per_m2" not in df.columns and "cloud_cover_oktas" in df.columns:
             # Invert cloud cover to estimate radiation (8 oktas = fully cloudy = low radiation)
@@ -245,8 +248,8 @@ def get_data_summary() -> dict:
     if df_weather is not None and not df_weather.empty:
         summary["weather"] = {
             "records": len(df_weather),
-            "start_date": df_weather["timestamp_utc"].min().isoformat(),
-            "end_date": df_weather["timestamp_utc"].max().isoformat(),
+            "start_date": df_weather.index.min().isoformat(),
+            "end_date": df_weather.index.max().isoformat(),
         }
     else:
         summary["weather"] = {"records": 0}

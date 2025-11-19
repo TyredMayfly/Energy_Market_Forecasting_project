@@ -22,7 +22,7 @@ from app.services.data_store import (
     save_weather_data,
 )
 from app.services.entsoe_client import EntsoeClient
-from app.services.knmi_client import KnmiClient
+from app.services.meteosource_client import MeteosourceClient
 
 logger = get_logger(__name__)
 
@@ -31,7 +31,8 @@ def initialize_historical_data_2025() -> bool:
     """
     Initialize historical data for 2025 from the beginning of the year until today.
 
-    Downloads all available data from ENTSO-E and KNMI for 2025.
+    Downloads all available data from ENTSO-E and Meteosource for 2025.
+    Note: Meteosource free tier provides 24-hour forecasts only.
 
     Returns:
         True if successful, False otherwise
@@ -66,21 +67,7 @@ def initialize_historical_data_2025() -> bool:
         logger.error(f"✗ Error fetching day-ahead data: {e}")
         success = False
 
-    # Fetch intraday prices
-    logger.info("\n--- Fetching Intraday Market Data ---")
-    try:
-        df_intraday = entsoe_client.fetch_intraday_prices_2025_nl(start_date, end_date)
-        if not df_intraday.empty:
-            save_market_data(df_intraday, "intraday")
-            logger.info(f"✓ Intraday: {len(df_intraday)} records")
-        else:
-            logger.warning("✗ No intraday data fetched")
-            # Not critical, continue
-    except Exception as e:
-        logger.error(f"✗ Error fetching intraday data: {e}")
-        # Not critical, continue
-
-    # Fetch imbalance data
+    # Fetch imbalance data (note: using unified CSV data from imbalance_data_loader)
     logger.info("\n--- Fetching Imbalance Market Data ---")
     try:
         df_imbalance = entsoe_client.fetch_imbalance_data_2025_nl(start_date, end_date)
@@ -94,19 +81,19 @@ def initialize_historical_data_2025() -> bool:
         logger.error(f"✗ Error fetching imbalance data: {e}")
         # Not critical, continue
 
-    # Fetch KNMI weather data
-    logger.info("\n--- Fetching KNMI Weather Data ---")
+    # Fetch Meteosource weather forecast
+    logger.info("\n--- Fetching Meteosource Weather Forecast ---")
     try:
-        knmi_client = KnmiClient()
-        df_weather = knmi_client.download_and_process_files_for_2025(max_files=100)
+        meteosource_client = MeteosourceClient()
+        df_weather = meteosource_client.fetch_forecast_for_2025()
         if not df_weather.empty:
             save_weather_data(df_weather)
-            logger.info(f"✓ Weather: {len(df_weather)} records")
+            logger.info(f"✓ Weather: {len(df_weather)} records (24-hour forecast)")
         else:
             logger.warning("✗ No weather data fetched")
             # Not critical for testing, but important for production
     except ValueError as e:
-        logger.error(f"✗ Failed to initialize KNMI client: {e}")
+        logger.error(f"✗ Failed to initialize Meteosource client: {e}")
     except Exception as e:
         logger.error(f"✗ Error fetching weather data: {e}")
 
@@ -190,16 +177,16 @@ def update_latest_data() -> bool:
         logger.error(f"Error updating ENTSO-E data: {e}")
         success = False
 
-    # Update KNMI weather data
+    # Update Meteosource weather forecast (24 hours)
     try:
-        knmi_client = KnmiClient()
-        # Fetch recent files only
-        df_weather = knmi_client.download_and_process_files_for_2025(max_files=10)
+        meteosource_client = MeteosourceClient()
+        df_weather = meteosource_client.fetch_forecast_for_2025()
         if not df_weather.empty:
-            append_weather_data(df_weather)
-            logger.info(f"✓ Appended {len(df_weather)} weather records")
+            # Replace weather data with latest 24-hour forecast
+            save_weather_data(df_weather)
+            logger.info(f"✓ Updated weather forecast: {len(df_weather)} records")
     except ValueError as e:
-        logger.error(f"Failed to initialize KNMI client: {e}")
+        logger.error(f"Failed to initialize Meteosource client: {e}")
     except Exception as e:
         logger.error(f"Error updating weather data: {e}")
 

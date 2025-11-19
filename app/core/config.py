@@ -25,21 +25,19 @@ class Settings(BaseSettings):
 
     # API Keys
     entsoe_api_key: str = ""
-    knmi_api_key: str = ""
+    meteosource_api_key: str = ""
 
     # ENTSO-E Configuration
     entsoe_base_url: str = "https://web-api.tp.entsoe.eu/api"
     netherlands_eic_code: str = "10YNL----------L"
 
-    # KNMI Configuration
-    knmi_base_url: str = "https://api.dataplatform.knmi.nl/open-data/v1"
-    knmi_dataset_name: str = "Actuele10mindataKNMIstations"
-    knmi_dataset_version: str = "2"
+    # Meteosource Configuration
+    meteosource_base_url: str = "https://www.meteosource.com/api/v1/free"
+    meteosource_location: str = "amsterdam"  # Default location
 
     # Application Settings
     timezone: str = "Europe/Amsterdam"
     data_dir: Path = Path(__file__).parent.parent.parent / "data"
-    demo_mode: bool = False  # Use existing sample data, reduced lag features
 
     # Update Schedule
     daily_update_hour: int = 0
@@ -49,8 +47,6 @@ class Settings(BaseSettings):
     max_forecast_horizon_hours: int = 36
     default_lag_hours: int = 168  # 7 days
     min_training_samples: int = 720  # 30 days at hourly resolution (or 7.5 days at 15-min)
-    demo_lag_hours: int = 24  # Reduced lags for demo mode (24 hours)
-    demo_min_training_samples: int = 48  # 2 days at hourly (or 12 hours at 15-min)
 
     model_config = ConfigDict(
         env_file=".env",
@@ -84,27 +80,36 @@ MARKET_TYPES = {
         "description": "Prices determined one day before delivery. Primary market for wholesale electricity trading.",
         "entsoe_document_type": "A44",
         "data_file": "entsoe_day_ahead_prices_2025.csv",
-        "price_column": "price_eur_per_mwh",
+        "target_column": "price_eur_per_mwh",
+        "target_type": "regression",
     },
-    "intraday": {
-        "display_name": "Intraday Market",
-        "description": "Continuous trading closer to delivery time. Allows market participants to adjust positions based on updated forecasts.",
-        "entsoe_document_type": "A45",
-        "data_file": "entsoe_intraday_prices_2025.csv",
-        "price_column": "price_eur_per_mwh",
+    "imbalance_shortage": {
+        "display_name": "Imbalance - Shortage Price",
+        "description": "Price paid when system has power shortage (down-regulation). Reflects cost of activating reserves to increase generation.",
+        "data_file": "imbalance_unified.csv",
+        "target_column": "shortage_price",
+        "target_type": "regression",
     },
-    "imbalance": {
-        "display_name": "Imbalance Market",
-        "description": "Real-time settlement prices for supply-demand imbalances. Reflects actual system conditions.",
-        "entsoe_document_type": "A53",
-        "data_file": "entsoe_imbalance_data_2025.csv",
-        "price_column": "imbalance_price_eur_per_mwh",
+    "imbalance_surplus": {
+        "display_name": "Imbalance - Surplus Price",
+        "description": "Price paid when system has power surplus (up-regulation). Reflects cost of reducing generation or increasing consumption.",
+        "data_file": "imbalance_unified.csv",
+        "target_column": "surplus_price",
+        "target_type": "regression",
+    },
+    "regulation_state": {
+        "display_name": "Regulation State",
+        "description": "Categorical forecast of system regulation state: -1 (DOWN), 0 (BALANCED), 1 (UP), 2 (UP_AND_DOWN). Uses classification model.",
+        "data_file": "imbalance_unified.csv",
+        "target_column": "regulation_state",
+        "target_type": "classification",
+        "class_labels": {-1: "DOWN", 0: "BALANCED", 1: "UP", 2: "UP_AND_DOWN"},
     },
 }
 
 # Weather data configuration
 WEATHER_CONFIG = {
-    "data_file": "knmi_weather_2025.csv",
+    "data_file": "weather_data_2025.csv",
     "required_variables": [
         "temperature_deg_c",
         "wind_speed_m_per_s",
@@ -127,6 +132,14 @@ MODEL_TYPES = {
         "description": "Advanced ensemble model using decision trees to capture non-linear patterns and complex interactions between features. More accurate but computationally intensive.",
         "n_estimators": 50,
         "max_depth": 10,
+        "random_state": 42,
+    },
+    "xgboost_classifier": {
+        "display_name": "XGBoost Classifier",
+        "description": "Gradient boosting classifier for multi-class prediction of regulation states. Uses advanced machine learning to predict categorical outcomes (UP, DOWN, BALANCED, UP_AND_DOWN).",
+        "n_estimators": 100,
+        "max_depth": 6,
+        "learning_rate": 0.1,
         "random_state": 42,
     },
 }
