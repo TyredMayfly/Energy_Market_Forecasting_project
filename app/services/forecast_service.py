@@ -212,10 +212,17 @@ class ForecastService:
 
             # Create and train model
             model = self._get_model_instance(model_type, market_type)
-            model.fit(X, y)
-
-            # Cache the trained model with metadata
+            
+            # Prepare feature columns (exclude timestamp)
             feature_columns = [col for col in X.columns if col != "timestamp_utc"]
+            
+            # For XGBoost, set feature columns before training
+            if model_type == "xgboost_classifier":
+                model.feature_columns = feature_columns
+            
+            # Train model with only feature columns (no timestamp)
+            X_train = X[feature_columns]
+            model.fit(X_train, y)
             model_metadata = {
                 "model": model,
                 "trained_at": datetime.utcnow(),
@@ -355,6 +362,7 @@ class ForecastService:
         # Get trained model
         model_info = self.trained_models[model_key]
         model = model_info["model"]
+        feature_columns = model_info["feature_columns"]  # Get feature columns from cached model
 
         try:
             # Build weather features dict from config
@@ -380,10 +388,14 @@ class ForecastService:
                     weather_features=weather_features,
                 )
                 if not X_historical.empty:
-                    predictions_historical = model.predict(X_historical)
+                    # Extract timestamp and feature columns
+                    timestamp_historical = X_historical["timestamp_utc"]
+                    X_historical_features = X_historical[feature_columns]
+                    
+                    predictions_historical = model.predict(X_historical_features)
                     df_historical = pd.DataFrame(
                         {
-                            "timestamp_utc": X_historical["timestamp_utc"],
+                            "timestamp_utc": timestamp_historical,
                             "forecast_price_eur_per_mwh": predictions_historical,
                             "model_type": model_type,
                             "market_type": market_type,
@@ -404,13 +416,17 @@ class ForecastService:
                 logger.error("Failed to build forecast features")
                 return None
 
+            # Extract timestamp and feature columns
+            timestamp_forecast = X_forecast["timestamp_utc"]
+            X_forecast_features = X_forecast[feature_columns]
+            
             # Generate predictions
-            predictions = model.predict(X_forecast)
+            predictions = model.predict(X_forecast_features)
 
             # Build result DataFrame for future forecast
             df_future = pd.DataFrame(
                 {
-                    "timestamp_utc": X_forecast["timestamp_utc"],
+                    "timestamp_utc": timestamp_forecast,
                     "forecast_price_eur_per_mwh": predictions,
                     "model_type": model_type,
                     "market_type": market_type,

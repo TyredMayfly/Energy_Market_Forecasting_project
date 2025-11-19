@@ -628,7 +628,7 @@ def plot_forecast_results(
     # For classification, add discrete y-axis ticks with labels
     if is_classification and "class_labels" in MARKET_TYPES[market_type]:
         class_labels = MARKET_TYPES[market_type]["class_labels"]
-        fig.update_yaxis(
+        fig.update_yaxes(
             tickmode="array",
             tickvals=list(class_labels.keys()),
             ticktext=list(class_labels.values()),
