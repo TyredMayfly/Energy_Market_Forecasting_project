@@ -3,6 +3,9 @@ Imbalance Data Loader Service
 
 This module handles loading and combining imbalance price data from multiple CSV files
 in the imbalance_data/ directory into a unified dataset.
+
+For real-time settlement prices, use the SettlementPriceService which provides
+hybrid local + TenneT API access with automatic freshness checking.
 """
 
 import logging

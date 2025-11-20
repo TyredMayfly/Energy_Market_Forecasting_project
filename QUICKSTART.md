@@ -45,10 +45,10 @@ List available tuned models:
 python scripts\search_hyperparameters.py --list
 ```
 
-Results are saved in `artifacts/hyperparameter_search/`:
+Results are saved in `hyperparameters/`:
 
 ```
-artifacts/hyperparameter_search/
+hyperparameters/
 ├── day_ahead/
 │   ├── linear_regression_latest.json  ← Best params for this combo
 │   └── random_forest_latest.json
@@ -156,7 +156,7 @@ python scripts\search_hyperparameters.py --market day_ahead --model random_fores
 Market_Forecasting_example/
 ├── app/services/hyperparameter_service.py  ← Core functions
 ├── scripts/search_hyperparameters.py       ← CLI script
-├── artifacts/hyperparameter_search/        ← Results saved here
+├── hyperparameters/                        ← Results saved here
 ├── tests/unit/test_hyperparameter_search.py ← Tests
 ├── examples/hyperparameter_search_example.py ← Examples
 └── docs/HYPERPARAMETER_SEARCH.md           ← Full docs

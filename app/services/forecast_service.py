@@ -95,43 +95,52 @@ class ForecastService:
                     f"Use one of: {', '.join(regression_models)}"
                 )
 
-    def _get_model_instance(self, model_type: str, market_type: str = None):
+    def _get_model_instance(self, model_type: str, market_type: str = None, user_hyperparams: Optional[Dict] = None):
         """
         Create a model instance based on type.
 
-        Automatically loads tuned hyperparameters if available.
+        Automatically loads tuned hyperparameters if available, unless user provides custom hyperparameters.
 
         Args:
             model_type: Type of model
             market_type: Type of market (needed for loading tuned hyperparameters)
+            user_hyperparams: Optional user-provided hyperparameters (overrides tuned params)
 
         Returns:
             Model instance
         """
-        # Try to load tuned hyperparameters if market_type provided
-        tuned_params = None
-        if market_type and model_type != "persistence":
+        # Use user-provided hyperparameters if available
+        if user_hyperparams:
+            params = user_hyperparams
+            logger.info(f"Using user-provided hyperparameters for {model_type}")
+        # Otherwise, try to load tuned hyperparameters if market_type provided
+        elif market_type and model_type != "persistence":
             tuned_params = load_best_params(market_type=market_type, model_type=model_type)
             if tuned_params:
+                params = tuned_params
                 logger.info(f"Loaded tuned hyperparameters for {model_type} on {market_type}")
+            else:
+                params = None
+        else:
+            params = None
 
         if model_type == "persistence":
             return PersistencePriceModel(method="last")
         elif model_type == "linear_regression":
-            if tuned_params:
-                return LinearRegressionPriceModel(**tuned_params)
+            if params:
+                return LinearRegressionPriceModel(**params)
             return LinearRegressionPriceModel()
         elif model_type == "random_forest":
-            if tuned_params:
-                return RandomForestPriceModel(**tuned_params)
+            if params:
+                return RandomForestPriceModel(**params)
             return RandomForestPriceModel()
         elif model_type == "xgboost_classifier":
-            if tuned_params:
-                return RegulationStateXGBModel(**tuned_params)
+            if params:
+                return RegulationStateXGBModel(**params)
             return RegulationStateXGBModel()
         elif model_type == "hist_gradient_boosting":
-            if tuned_params:
-                return HistGradientBoostingPriceModel(**tuned_params)
+            if params:
+                return HistGradientBoostingPriceModel(**params)
             return HistGradientBoostingPriceModel()
         else:
             raise ValueError(f"Unknown model type: {model_type}")
@@ -168,6 +177,7 @@ class ForecastService:
         model_type: str,
         force_retrain: bool = False,
         training_config: Optional[TrainingDataConfig] = None,
+        hyperparameters: Optional[Dict] = None,
     ) -> bool:
         """
         Train a model for a specific market.
@@ -177,6 +187,7 @@ class ForecastService:
             model_type: Type of model
             force_retrain: Force retraining even if model is cached
             training_config: Configuration for which data sources to use
+            hyperparameters: Optional user-provided hyperparameters (overrides tuned params)
 
         Returns:
             True if successful, False otherwise
@@ -233,7 +244,7 @@ class ForecastService:
                 # Continue anyway to allow forecasting with limited data
 
             # Create and train model
-            model = self._get_model_instance(model_type, market_type)
+            model = self._get_model_instance(model_type, market_type, hyperparameters)
             
             # Prepare feature columns (exclude timestamp)
             feature_columns = [col for col in X.columns if col != "timestamp_utc"]
@@ -289,6 +300,7 @@ class ForecastService:
         forecast_start: Optional[datetime] = None,
         historical_window_hours: int = 0,
         training_config: Optional[TrainingDataConfig] = None,
+        hyperparameters: Optional[Dict] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Generate a forecast for a specific market using a specific model.
@@ -300,6 +312,7 @@ class ForecastService:
             forecast_start: Starting timestamp for forecast (default: now)
             historical_window_hours: Number of hours to include before forecast_start (for RMSE calculation)
             training_config: Configuration for which data sources to use
+            hyperparameters: Optional user-provided hyperparameters (overrides tuned params)
 
         Returns:
             DataFrame with forecast or None if error
@@ -377,7 +390,7 @@ class ForecastService:
         model_key = self._get_model_key(market_type, model_type, training_config)
         if model_key not in self.trained_models:
             logger.info(f"Model not cached, training {model_key}")
-            success = self.train_model(market_type, model_type, training_config=training_config)
+            success = self.train_model(market_type, model_type, training_config=training_config, hyperparameters=hyperparameters)
             if not success:
                 return None
 

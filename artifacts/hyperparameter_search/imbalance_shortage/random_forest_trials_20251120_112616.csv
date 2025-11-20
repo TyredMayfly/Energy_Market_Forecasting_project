@@ -1,3 +1,0 @@
-trial_id,mean_cv_score,std_cv_score,bootstrap,max_depth,max_features,min_samples_leaf,min_samples_split,n_estimators
-0,-82443.808022204,3212.6375586072463,True,24,sqrt,8,8,171
-1,-81722.80453461615,1389.1061882991416,True,27,,8,5,153

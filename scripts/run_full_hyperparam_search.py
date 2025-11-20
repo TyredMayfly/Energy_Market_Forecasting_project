@@ -103,7 +103,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        help="Output directory for results (default: artifacts/hyperparameter_search/)",
+        help="Output directory for results (default: hyperparameters/)",
     )
     parser.add_argument(
         "--update-defaults",
@@ -337,7 +337,7 @@ def main():
 
     # Set default output directory
     if args.output_dir is None:
-        args.output_dir = Path(__file__).parent.parent / "artifacts" / "hyperparameter_search"
+        args.output_dir = Path(__file__).parent.parent / "hyperparameters"
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 

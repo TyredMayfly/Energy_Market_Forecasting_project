@@ -99,12 +99,15 @@ The app will be available at http://localhost:8501
   /core             # Configuration, logging (Pydantic v2)
   /models           # ML model implementations (Persistence, LinearRegression, RandomForest, XGBoost)
   /services         # Data loading, feature engineering, forecast generation, auto-updates
-/artifacts          # Hyperparameter search results (model tuning)
-  /hyperparameter_search/
-    ├── summary.csv              # Global search results
-    ├── hyperparams_defaults.json  # Recommended defaults
-    ├── plots/                   # Analysis visualizations
-    └── <market>/<model>_*.json/csv  # Per-combination results
+/hyperparameters    # Hyperparameter search results (model tuning)
+  ├── summary.csv              # Global search results
+  ├── hyperparams_defaults.json  # Recommended defaults
+  ├── day_ahead/
+  │   ├── {model}_latest.json
+  │   └── {model}_trials_latest.csv
+  ├── imbalance_shortage/
+  ├── imbalance_surplus/
+  └── regulation_state/
 /data               # Market and weather data files (auto-updated)
   ├── entsoe_day_ahead_prices_2025.csv
   ├── imbalance_unified.csv
@@ -190,7 +193,7 @@ python scripts/search_hyperparameters.py --list
 - Time-series cross-validation (respects temporal ordering)
 - RandomizedSearchCV with customizable iterations
 - Automatic parameter grid definition per model type
-- Results saved to `artifacts/hyperparameter_search/`
+- Results saved to `hyperparameters/`
 - Automatic loading of tuned parameters during training
 
 For full documentation, see: [docs/HYPERPARAMETER_SEARCH.md](docs/HYPERPARAMETER_SEARCH.md)

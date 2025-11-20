@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # API Keys
     entsoe_api_key: str = ""
     meteosource_api_key: str = ""
+    tennet_api_key: str = ""
 
     # ENTSO-E Configuration
     entsoe_base_url: str = "https://web-api.tp.entsoe.eu/api"
@@ -34,6 +35,10 @@ class Settings(BaseSettings):
     # Meteosource Configuration
     meteosource_base_url: str = "https://www.meteosource.com/api/v1/free"
     meteosource_location: str = "amsterdam"  # Default location
+
+    # TenneT Settlement Prices Configuration
+    tennet_settlement_base_url: str = "https://api.tennet.eu/settlement-prices/v1"
+    tennet_api_timeout: int = 10  # seconds
 
     # Application Settings
     timezone: str = "Europe/Amsterdam"

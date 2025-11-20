@@ -285,13 +285,13 @@ def save_search_results(
         best_params: Best hyperparameters found
         best_score: Best cross-validation score
         metadata: Search metadata (samples, features, etc.)
-        output_dir: Directory to save results (default: artifacts/hyperparameter_search/)
+        output_dir: Directory to save results (default: hyperparameters/)
 
     Returns:
         Path to saved results file
     """
     if output_dir is None:
-        output_dir = Path(__file__).parent.parent.parent / "artifacts" / "hyperparameter_search"
+        output_dir = Path(__file__).parent.parent.parent / "hyperparameters"
 
     # Create directory structure
     market_dir = output_dir / market_type
@@ -336,13 +336,13 @@ def load_best_params(
     Args:
         market_type: Type of market
         model_type: Type of model
-        search_dir: Directory containing search results (default: artifacts/hyperparameter_search/)
+        search_dir: Directory containing search results (default: hyperparameters/)
 
     Returns:
         Dictionary of best hyperparameters, or None if not found
     """
     if search_dir is None:
-        search_dir = Path(__file__).parent.parent.parent / "artifacts" / "hyperparameter_search"
+        search_dir = Path(__file__).parent.parent.parent / "hyperparameters"
 
     # Try to load the "latest" file
     latest_filepath = search_dir / market_type / f"{model_type}_latest.json"
@@ -371,13 +371,13 @@ def list_available_tuned_models(
     List all available tuned model-market combinations.
 
     Args:
-        search_dir: Directory containing search results (default: artifacts/hyperparameter_search/)
+        search_dir: Directory containing search results (default: hyperparameters/)
 
     Returns:
         List of dictionaries with 'market_type', 'model_type', and 'filepath'
     """
     if search_dir is None:
-        search_dir = Path(__file__).parent.parent.parent / "artifacts" / "hyperparameter_search"
+        search_dir = Path(__file__).parent.parent.parent / "hyperparameters"
 
     if not search_dir.exists():
         return []
@@ -449,14 +449,14 @@ def save_search_results_with_trials(
         model_type: Type of model
         best_params: Best hyperparameters found
         best_score: Best cross-validation score
-        metadata: Search metadata including cv_results
-        output_dir: Directory to save results (default: artifacts/hyperparameter_search/)
+        metadata: Search metadata including trials
+        output_dir: Directory to save results (default: hyperparameters/)
 
     Returns:
         Tuple of (best_json_path, trials_csv_path)
     """
     if output_dir is None:
-        output_dir = Path(__file__).parent.parent.parent / "artifacts" / "hyperparameter_search"
+        output_dir = Path(__file__).parent.parent.parent / "hyperparameters"
 
     # Create directory structure
     market_dir = output_dir / market_type

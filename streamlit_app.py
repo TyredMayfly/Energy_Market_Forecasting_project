@@ -30,17 +30,36 @@ st.set_page_config(
 )
 
 
-def get_model_hyperparameters_ui(model_type: str) -> Dict:
+def get_model_hyperparameters_ui(model_type: str, market_type: str) -> Dict:
     """
     Render model-specific hyperparameter controls and return their values.
 
     Args:
         model_type: Selected model type
+        market_type: Selected market type (for loading tuned params)
 
     Returns:
         Dictionary of hyperparameter values
     """
     hyperparams = {}
+    
+    # Check for tuned parameters
+    tuned_params = load_best_params(market_type=market_type, model_type=model_type)
+    
+    # Button to load tuned parameters into sliders
+    if tuned_params:
+        col_btn1, col_btn2 = st.columns([1, 2])
+        with col_btn1:
+            if st.button("📥 Load Tuned Parameters", help="Populate sliders with optimized values from hyperparameter search"):
+                st.session_state[f"{model_type}_use_tuned"] = True
+                st.rerun()
+        with col_btn2:
+            if st.button("🔄 Reset to Defaults", help="Reset sliders to default values"):
+                st.session_state[f"{model_type}_use_tuned"] = False
+                st.rerun()
+
+    # Check if we should use tuned values
+    use_tuned = st.session_state.get(f"{model_type}_use_tuned", False)
 
     if model_type == "persistence":
         st.markdown("**Persistence Model Settings**")
@@ -70,13 +89,22 @@ def get_model_hyperparameters_ui(model_type: str) -> Dict:
 
     elif model_type == "random_forest":
         st.markdown("**Random Forest Settings**")
+        
+        # Get default or tuned values
+        default_n_estimators = tuned_params.get("n_estimators", 50) if use_tuned and tuned_params else 50
+        default_max_depth = tuned_params.get("max_depth") if use_tuned and tuned_params else None
+        default_min_samples_leaf = tuned_params.get("min_samples_leaf", 1) if use_tuned and tuned_params else 1
+        default_min_samples_split = tuned_params.get("min_samples_split", 2) if use_tuned and tuned_params else 2
+        default_max_features = tuned_params.get("max_features", "sqrt") if use_tuned and tuned_params else "sqrt"
+        default_bootstrap = tuned_params.get("bootstrap", True) if use_tuned and tuned_params else True
+        
         col1, col2 = st.columns(2)
         with col1:
             hyperparams["n_estimators"] = st.slider(
                 "Number of trees",
                 min_value=10,
-                max_value=200,
-                value=50,
+                max_value=500,
+                value=int(default_n_estimators),
                 step=10,
                 help="Number of trees in the forest",
             )
@@ -84,23 +112,50 @@ def get_model_hyperparameters_ui(model_type: str) -> Dict:
                 "Min samples per leaf",
                 min_value=1,
                 max_value=20,
-                value=1,
+                value=int(default_min_samples_leaf),
                 help="Minimum number of samples required at a leaf node",
             )
+            hyperparams["min_samples_split"] = st.slider(
+                "Min samples to split",
+                min_value=2,
+                max_value=20,
+                value=int(default_min_samples_split),
+                help="Minimum number of samples required to split an internal node",
+            )
         with col2:
+            # Max depth handling
             max_depth_enabled = st.checkbox(
-                "Limit tree depth", value=False, help="Enable maximum depth constraint"
+                "Limit tree depth", 
+                value=default_max_depth is not None, 
+                help="Enable maximum depth constraint"
             )
             if max_depth_enabled:
                 hyperparams["max_depth"] = st.slider(
                     "Max depth",
                     min_value=5,
                     max_value=50,
-                    value=20,
+                    value=int(default_max_depth) if default_max_depth is not None else 20,
                     help="Maximum depth of each tree",
                 )
             else:
                 hyperparams["max_depth"] = None
+
+            # Max features
+            max_features_options = ["sqrt", "log2", None]
+            max_features_display = {"sqrt": "sqrt", "log2": "log2", None: "All features"}
+            hyperparams["max_features"] = st.selectbox(
+                "Max features",
+                options=max_features_options,
+                index=max_features_options.index(default_max_features) if default_max_features in max_features_options else 0,
+                format_func=lambda x: max_features_display[x],
+                help="Number of features to consider when looking for the best split",
+            )
+            
+            hyperparams["bootstrap"] = st.checkbox(
+                "Use bootstrap samples",
+                value=default_bootstrap,
+                help="Whether bootstrap samples are used when building trees",
+            )
 
             hyperparams["random_state"] = st.number_input(
                 "Random seed",
@@ -112,13 +167,22 @@ def get_model_hyperparameters_ui(model_type: str) -> Dict:
 
     elif model_type == "hist_gradient_boosting":
         st.markdown("**Histogram Gradient Boosting Settings**")
+        
+        # Get default or tuned values
+        default_max_iter = tuned_params.get("max_iter", 500) if use_tuned and tuned_params else 500
+        default_learning_rate = tuned_params.get("learning_rate", 0.05) if use_tuned and tuned_params else 0.05
+        default_max_depth = tuned_params.get("max_depth", 6) if use_tuned and tuned_params else 6
+        default_max_leaf_nodes = tuned_params.get("max_leaf_nodes", 31) if use_tuned and tuned_params else 31
+        default_min_samples_leaf = tuned_params.get("min_samples_leaf", 50) if use_tuned and tuned_params else 50
+        default_l2_regularization = tuned_params.get("l2_regularization", 0.0) if use_tuned and tuned_params else 0.0
+        
         col1, col2 = st.columns(2)
         with col1:
             hyperparams["max_iter"] = st.slider(
                 "Max iterations",
                 min_value=100,
                 max_value=1000,
-                value=500,
+                value=int(default_max_iter),
                 step=50,
                 help="Maximum number of boosting iterations",
             )
@@ -126,7 +190,7 @@ def get_model_hyperparameters_ui(model_type: str) -> Dict:
                 "Learning rate",
                 min_value=0.01,
                 max_value=0.3,
-                value=0.05,
+                value=float(default_learning_rate),
                 step=0.01,
                 help="Learning rate shrinks contribution of each tree",
             )
@@ -134,7 +198,7 @@ def get_model_hyperparameters_ui(model_type: str) -> Dict:
                 "Max tree depth",
                 min_value=3,
                 max_value=15,
-                value=6,
+                value=int(default_max_depth) if default_max_depth is not None else 6,
                 help="Maximum depth of each tree (None for unlimited)",
             )
         with col2:
@@ -142,46 +206,56 @@ def get_model_hyperparameters_ui(model_type: str) -> Dict:
                 "Max leaf nodes",
                 min_value=15,
                 max_value=100,
-                value=31,
+                value=int(default_max_leaf_nodes) if default_max_leaf_nodes is not None else 31,
                 help="Maximum number of leaves per tree",
             )
             hyperparams["min_samples_leaf"] = st.slider(
                 "Min samples per leaf",
                 min_value=10,
                 max_value=100,
-                value=50,
+                value=int(default_min_samples_leaf),
                 help="Minimum samples required at a leaf node",
             )
             hyperparams["l2_regularization"] = st.slider(
                 "L2 regularization",
                 min_value=0.0,
                 max_value=1.0,
-                value=0.0,
+                value=float(default_l2_regularization),
                 step=0.1,
                 help="L2 regularization parameter",
             )
 
     elif model_type == "xgboost_classifier":
         st.markdown("**XGBoost Classifier Settings**")
+        
+        # Get default or tuned values
+        default_n_estimators = tuned_params.get("n_estimators", 100) if use_tuned and tuned_params else 100
+        default_max_depth = tuned_params.get("max_depth", 6) if use_tuned and tuned_params else 6
+        default_learning_rate = tuned_params.get("learning_rate", 0.1) if use_tuned and tuned_params else 0.1
+        
         col1, col2 = st.columns(2)
         with col1:
             hyperparams["n_estimators"] = st.slider(
                 "Number of boosting rounds",
                 min_value=50,
                 max_value=300,
-                value=100,
+                value=int(default_n_estimators),
                 step=10,
                 help="Number of gradient boosted trees",
             )
             hyperparams["max_depth"] = st.slider(
-                "Max tree depth", min_value=3, max_value=15, value=6, help="Maximum depth of trees"
+                "Max tree depth", 
+                min_value=3, 
+                max_value=15, 
+                value=int(default_max_depth), 
+                help="Maximum depth of trees"
             )
         with col2:
             hyperparams["learning_rate"] = st.slider(
                 "Learning rate",
                 min_value=0.01,
                 max_value=0.5,
-                value=0.1,
+                value=float(default_learning_rate),
                 step=0.01,
                 help="Step size shrinkage to prevent overfitting",
             )
@@ -257,21 +331,8 @@ def get_forecast_configuration() -> Optional[Dict]:
         with col1:
             st.subheader("3️⃣ Model Hyperparameters")
             
-            # Check if tuned hyperparameters are available
-            tuned_params = load_best_params(market_type=market_type, model_type=model_type)
-            
-            if tuned_params:
-                st.success(f"✅ Using optimized hyperparameters from search")
-                with st.expander("📊 View Tuned Parameters", expanded=False):
-                    st.json(tuned_params)
-                st.info("💡 The forecast will automatically use these optimized parameters. The model was tuned using cross-validation on historical data.")
-            else:
-                st.info("ℹ️ No tuned hyperparameters found. Using default values.")
-                st.caption("Run hyperparameter search to optimize model performance.")
-            
-            # Note: Hyperparameters are loaded automatically by forecast service
-            # UI controls removed - they weren't being used anyway
-            hyperparameters = {}  # Placeholder for config compatibility
+            # Render hyperparameter controls (includes load tuned button)
+            hyperparameters = get_model_hyperparameters_ui(model_type, market_type)
 
         with col2:
             st.subheader("4️⃣ Training Data Sources")
@@ -461,6 +522,7 @@ def generate_forecast_with_config(
             horizon_hours=config["forecast_horizon_hours"],
             historical_window_hours=config["historical_window_hours"],
             training_config=training_config,
+            hyperparameters=config["hyperparameters"],
         )
 
     # Get training data if requested
