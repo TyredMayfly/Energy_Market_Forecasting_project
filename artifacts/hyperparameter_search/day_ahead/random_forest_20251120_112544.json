@@ -1,0 +1,83 @@
+{
+  "best_params": {
+    "bootstrap": true,
+    "max_depth": 24,
+    "max_features": "sqrt",
+    "min_samples_leaf": 8,
+    "min_samples_split": 8,
+    "n_estimators": 171
+  },
+  "best_score": -1537.9663003617711,
+  "metadata": {
+    "model_type": "random_forest",
+    "market_type": "day_ahead",
+    "search_timestamp": "2025-11-20T11:25:44.014135",
+    "n_samples_train": 10644,
+    "n_samples_test": 2662,
+    "n_features": 18,
+    "feature_names": [
+      "hour_of_day",
+      "day_of_week",
+      "is_weekend",
+      "hour_sin",
+      "hour_cos",
+      "day_sin",
+      "day_cos",
+      "month",
+      "price_eur_per_mwh_lag_24h",
+      "price_eur_per_mwh_lag_48h",
+      "price_eur_per_mwh_lag_168h",
+      "price_eur_per_mwh_rolling_mean_24h",
+      "price_eur_per_mwh_rolling_std_24h",
+      "temperature_deg_c",
+      "wind_speed_m_per_s",
+      "cloud_cover_pct",
+      "precipitation_mm",
+      "global_radiation_w_per_m2"
+    ],
+    "n_iter": 2,
+    "cv_splits": 2,
+    "test_size_ratio": 0.2,
+    "random_state": 42,
+    "scoring": "neg_mean_squared_error",
+    "best_cv_score": -1537.9663003617711,
+    "test_score": 0.6473319781657919,
+    "test_rmse": 20.20814411613286,
+    "best_params": {
+      "bootstrap": true,
+      "max_depth": 24,
+      "max_features": "sqrt",
+      "min_samples_leaf": 8,
+      "min_samples_split": 8,
+      "n_estimators": 171
+    },
+    "cv_results": {
+      "mean_test_scores": [
+        -1537.9663003617711,
+        -1564.8992039630975
+      ],
+      "std_test_scores": [
+        308.0468867462446,
+        333.6497270522606
+      ],
+      "params": [
+        {
+          "bootstrap": true,
+          "max_depth": 24,
+          "max_features": "sqrt",
+          "min_samples_leaf": 8,
+          "min_samples_split": 8,
+          "n_estimators": 171
+        },
+        {
+          "bootstrap": true,
+          "max_depth": 27,
+          "max_features": null,
+          "min_samples_leaf": 8,
+          "min_samples_split": 5,
+          "n_estimators": 153
+        }
+      ]
+    }
+  }
+}

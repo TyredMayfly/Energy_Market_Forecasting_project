@@ -1,0 +1,62 @@
+{
+  "best_params": {
+    "fit_intercept": true
+  },
+  "best_score": -1688.4129430454652,
+  "metadata": {
+    "model_type": "linear_regression",
+    "market_type": "day_ahead",
+    "search_timestamp": "2025-11-20T11:05:16.978012",
+    "n_samples_train": 10644,
+    "n_samples_test": 2662,
+    "n_features": 18,
+    "feature_names": [
+      "hour_of_day",
+      "day_of_week",
+      "is_weekend",
+      "hour_sin",
+      "hour_cos",
+      "day_sin",
+      "day_cos",
+      "month",
+      "price_eur_per_mwh_lag_24h",
+      "price_eur_per_mwh_lag_48h",
+      "price_eur_per_mwh_lag_168h",
+      "price_eur_per_mwh_rolling_mean_24h",
+      "price_eur_per_mwh_rolling_std_24h",
+      "temperature_deg_c",
+      "wind_speed_m_per_s",
+      "cloud_cover_pct",
+      "precipitation_mm",
+      "global_radiation_w_per_m2"
+    ],
+    "n_iter": 5,
+    "cv_splits": 2,
+    "test_size_ratio": 0.2,
+    "random_state": 42,
+    "scoring": "neg_mean_squared_error",
+    "best_cv_score": -1688.4129430454652,
+    "test_score": 0.5559823326778471,
+    "best_params": {
+      "fit_intercept": true
+    },
+    "cv_results": {
+      "mean_test_scores": [
+        -1688.4129430454652,
+        -1688.4129430454652
+      ],
+      "std_test_scores": [
+        137.9972973769734,
+        137.9972973769734
+      ],
+      "params": [
+        {
+          "fit_intercept": true
+        },
+        {
+          "fit_intercept": false
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "best_params": {
+    "colsample_bytree": 0.7334834444556088,
+    "gamma": 0.07143340896097039,
+    "learning_rate": 0.20526654188465587,
+    "max_depth": 7,
+    "n_estimators": 51,
+    "reg_alpha": 0.7219987722668247,
+    "reg_lambda": 2.3771054180315003,
+    "subsample": 0.6003115063364057
+  },
+  "best_score": 0.47019522365428357,
+  "metadata": {
+    "model_type": "xgboost_classifier",
+    "market_type": "regulation_state",
+    "search_timestamp": "2025-11-20T11:26:50.342595",
+    "n_samples_train": 31657,
+    "n_samples_test": 7915,
+    "n_features": 18,
+    "feature_names": [
+      "hour_of_day",
+      "day_of_week",
+      "is_weekend",
+      "hour_sin",
+      "hour_cos",
+      "day_sin",
+      "day_cos",
+      "month",
+      "regulation_state_lag_24h",
+      "regulation_state_lag_48h",
+      "regulation_state_lag_168h",
+      "regulation_state_rolling_mean_24h",
+      "regulation_state_rolling_std_24h",
+      "temperature_deg_c",
+      "wind_speed_m_per_s",
+      "cloud_cover_pct",
+      "precipitation_mm",
+      "global_radiation_w_per_m2"
+    ],
+    "n_iter": 2,
+    "cv_splits": 2,
+    "test_size_ratio": 0.2,
+    "random_state": 42,
+    "scoring": "accuracy",
+    "best_cv_score": 0.47019522365428357,
+    "test_score": 0.4483891345546431,
+    "test_rmse": null,
+    "best_params": {
+      "colsample_bytree": 0.7334834444556088,
+      "gamma": 0.07143340896097039,
+      "learning_rate": 0.20526654188465587,
+      "max_depth": 7,
+      "n_estimators": 51,
+      "reg_alpha": 0.7219987722668247,
+      "reg_lambda": 2.3771054180315003,
+      "subsample": 0.6003115063364057
+    },
+    "cv_results": {
+      "mean_test_scores": [
+        0.44129075056861256,
+        0.47019522365428357
+      ],
+      "std_test_scores": [
+        0.006396891584533743,
+        0.0003316906747536097
+      ],
+      "params": [
+        {
+          "colsample_bytree": 0.749816047538945,
+          "gamma": 0.4753571532049581,
+          "learning_rate": 0.22959818254342154,
+          "max_depth": 7,
+          "n_estimators": 152,
+          "reg_alpha": 0.44583275285359114,
+          "reg_lambda": 0.6999498316360058,
+          "subsample": 0.7836995567863468
+        },
+        {
+          "colsample_bytree": 0.7334834444556088,
+          "gamma": 0.07143340896097039,
+          "learning_rate": 0.20526654188465587,
+          "max_depth": 7,
+          "n_estimators": 51,
+          "reg_alpha": 0.7219987722668247,
+          "reg_lambda": 2.3771054180315003,
+          "subsample": 0.6003115063364057
+        }
+      ]
+    }
+  }
+}

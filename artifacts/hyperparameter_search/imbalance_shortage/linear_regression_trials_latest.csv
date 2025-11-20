@@ -1,0 +1,3 @@
+trial_id,mean_cv_score,std_cv_score,fit_intercept
+0,-34580.731254938735,8845.507218321482,True
+1,-34580.731254938735,8845.507218321482,False

@@ -1,0 +1,83 @@
+{
+  "best_params": {
+    "min_samples_leaf": 20,
+    "max_leaf_nodes": 31,
+    "max_iter": 300,
+    "max_depth": 3,
+    "learning_rate": 0.05,
+    "l2_regularization": 0.1
+  },
+  "best_score": -29541.555319578612,
+  "metadata": {
+    "model_type": "hist_gradient_boosting",
+    "market_type": "imbalance_surplus",
+    "search_timestamp": "2025-11-20T11:26:46.481938",
+    "n_samples_train": 30303,
+    "n_samples_test": 7576,
+    "n_features": 18,
+    "feature_names": [
+      "hour_of_day",
+      "day_of_week",
+      "is_weekend",
+      "hour_sin",
+      "hour_cos",
+      "day_sin",
+      "day_cos",
+      "month",
+      "surplus_price_lag_24h",
+      "surplus_price_lag_48h",
+      "surplus_price_lag_168h",
+      "surplus_price_rolling_mean_24h",
+      "surplus_price_rolling_std_24h",
+      "temperature_deg_c",
+      "wind_speed_m_per_s",
+      "cloud_cover_pct",
+      "precipitation_mm",
+      "global_radiation_w_per_m2"
+    ],
+    "n_iter": 2,
+    "cv_splits": 2,
+    "test_size_ratio": 0.2,
+    "random_state": 42,
+    "scoring": "neg_mean_squared_error",
+    "best_cv_score": -29541.555319578612,
+    "test_score": 0.06379132511117624,
+    "test_rmse": 169.68832181346784,
+    "best_params": {
+      "min_samples_leaf": 20,
+      "max_leaf_nodes": 31,
+      "max_iter": 300,
+      "max_depth": 3,
+      "learning_rate": 0.05,
+      "l2_regularization": 0.1
+    },
+    "cv_results": {
+      "mean_test_scores": [
+        -30228.42697486498,
+        -29541.555319578612
+      ],
+      "std_test_scores": [
+        6150.880615645543,
+        5272.408023536707
+      ],
+      "params": [
+        {
+          "min_samples_leaf": 20,
+          "max_leaf_nodes": 31,
+          "max_iter": 800,
+          "max_depth": null,
+          "learning_rate": 0.03,
+          "l2_regularization": 0.0
+        },
+        {
+          "min_samples_leaf": 20,
+          "max_leaf_nodes": 31,
+          "max_iter": 300,
+          "max_depth": 3,
+          "learning_rate": 0.05,
+          "l2_regularization": 0.1
+        }
+      ]
+    }
+  }
+}

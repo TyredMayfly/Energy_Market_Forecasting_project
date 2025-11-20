@@ -1,0 +1,128 @@
+{
+  "day_ahead": {
+    "hist_gradient_boosting": {
+      "best_params": {
+        "min_samples_leaf": 20,
+        "max_leaf_nodes": 15,
+        "max_iter": 500,
+        "max_depth": null,
+        "learning_rate": 0.05,
+        "l2_regularization": 0.0
+      },
+      "best_score": -972.9807447080681,
+      "scoring": "neg_mean_squared_error",
+      "last_updated": "2025-11-20T11:36:59.760080"
+    },
+    "linear_regression": {
+      "best_params": {
+        "fit_intercept": true
+      },
+      "best_score": -1894.666764231271,
+      "scoring": "neg_mean_squared_error",
+      "last_updated": "2025-11-20T11:27:05.547567"
+    },
+    "random_forest": {
+      "best_params": {
+        "bootstrap": false,
+        "max_depth": 21,
+        "max_features": "sqrt",
+        "min_samples_leaf": 4,
+        "min_samples_split": 17,
+        "n_estimators": 266
+      },
+      "best_score": -1231.3155562516083,
+      "scoring": "neg_mean_squared_error",
+      "last_updated": "2025-11-20T11:34:51.044837"
+    }
+  },
+  "imbalance_shortage": {
+    "hist_gradient_boosting": {
+      "best_params": {
+        "min_samples_leaf": 100,
+        "max_leaf_nodes": 31,
+        "max_iter": 300,
+        "max_depth": 3,
+        "learning_rate": 0.03,
+        "l2_regularization": 1.0
+      },
+      "best_score": -34072.92663557459,
+      "scoring": "neg_mean_squared_error",
+      "last_updated": "2025-11-20T12:02:12.191019"
+    },
+    "linear_regression": {
+      "best_params": {
+        "fit_intercept": true
+      },
+      "best_score": -34580.731254938735,
+      "scoring": "neg_mean_squared_error",
+      "last_updated": "2025-11-20T11:37:00.192096"
+    },
+    "random_forest": {
+      "best_params": {
+        "bootstrap": true,
+        "max_depth": 5,
+        "max_features": "sqrt",
+        "min_samples_leaf": 9,
+        "min_samples_split": 14,
+        "n_estimators": 282
+      },
+      "best_score": -43641.99693353842,
+      "scoring": "neg_mean_squared_error",
+      "last_updated": "2025-11-20T12:00:22.743427"
+    }
+  },
+  "imbalance_surplus": {
+    "hist_gradient_boosting": {
+      "best_params": {
+        "min_samples_leaf": 100,
+        "max_leaf_nodes": 15,
+        "max_iter": 300,
+        "max_depth": 5,
+        "learning_rate": 0.03,
+        "l2_regularization": 1.0
+      },
+      "best_score": -29658.72501241498,
+      "scoring": "neg_mean_squared_error",
+      "last_updated": "2025-11-20T12:26:13.245905"
+    },
+    "linear_regression": {
+      "best_params": {
+        "fit_intercept": true
+      },
+      "best_score": -31019.93382708384,
+      "scoring": "neg_mean_squared_error",
+      "last_updated": "2025-11-20T12:02:12.648619"
+    },
+    "random_forest": {
+      "best_params": {
+        "bootstrap": true,
+        "max_depth": 5,
+        "max_features": "log2",
+        "min_samples_leaf": 2,
+        "min_samples_split": 19,
+        "n_estimators": 84
+      },
+      "best_score": -31735.906852364657,
+      "scoring": "neg_mean_squared_error",
+      "last_updated": "2025-11-20T12:24:36.385588"
+    }
+  },
+  "plots": {},
+  "regulation_state": {
+    "xgboost_classifier": {
+      "best_params": {
+        "colsample_bytree": 0.7704365900187764,
+        "gamma": 0.11128820878551526,
+        "learning_rate": 0.12899548058627555,
+        "max_depth": 4,
+        "n_estimators": 54,
+        "reg_alpha": 0.5133261686923929,
+        "reg_lambda": 0.9664561448490556,
+        "subsample": 0.8325221668907129
+      },
+      "best_score": 0.5010993176648977,
+      "scoring": "accuracy",
+      "last_updated": "2025-11-20T12:30:10.104134"
+    }
+  }
+}

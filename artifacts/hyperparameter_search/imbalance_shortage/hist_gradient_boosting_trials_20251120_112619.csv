@@ -1,0 +1,3 @@
+trial_id,mean_cv_score,std_cv_score,min_samples_leaf,max_leaf_nodes,max_iter,max_depth,learning_rate,l2_regularization
+0,-37648.23733102998,6706.348015239613,20,31,800,,0.03,0.0
+1,-34504.90594636577,2540.4524793616747,20,31,300,3.0,0.05,0.1

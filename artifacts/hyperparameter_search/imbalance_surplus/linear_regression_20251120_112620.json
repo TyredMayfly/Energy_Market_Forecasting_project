@@ -1,0 +1,63 @@
+{
+  "best_params": {
+    "fit_intercept": true
+  },
+  "best_score": -29583.102968488372,
+  "metadata": {
+    "model_type": "linear_regression",
+    "market_type": "imbalance_surplus",
+    "search_timestamp": "2025-11-20T11:26:20.240659",
+    "n_samples_train": 30303,
+    "n_samples_test": 7576,
+    "n_features": 18,
+    "feature_names": [
+      "hour_of_day",
+      "day_of_week",
+      "is_weekend",
+      "hour_sin",
+      "hour_cos",
+      "day_sin",
+      "day_cos",
+      "month",
+      "surplus_price_lag_24h",
+      "surplus_price_lag_48h",
+      "surplus_price_lag_168h",
+      "surplus_price_rolling_mean_24h",
+      "surplus_price_rolling_std_24h",
+      "temperature_deg_c",
+      "wind_speed_m_per_s",
+      "cloud_cover_pct",
+      "precipitation_mm",
+      "global_radiation_w_per_m2"
+    ],
+    "n_iter": 2,
+    "cv_splits": 2,
+    "test_size_ratio": 0.2,
+    "random_state": 42,
+    "scoring": "neg_mean_squared_error",
+    "best_cv_score": -29583.102968488372,
+    "test_score": 0.06151962795831911,
+    "test_rmse": 169.8940702381566,
+    "best_params": {
+      "fit_intercept": true
+    },
+    "cv_results": {
+      "mean_test_scores": [
+        -29583.102968488372,
+        -29583.102968488372
+      ],
+      "std_test_scores": [
+        5779.4000488444835,
+        5779.4000488444835
+      ],
+      "params": [
+        {
+          "fit_intercept": true
+        },
+        {
+          "fit_intercept": false
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "best_params": {
+    "bootstrap": true,
+    "max_depth": 27,
+    "max_features": null,
+    "min_samples_leaf": 8,
+    "min_samples_split": 5,
+    "n_estimators": 153
+  },
+  "best_score": -81722.80453461615,
+  "metadata": {
+    "model_type": "random_forest",
+    "market_type": "imbalance_shortage",
+    "search_timestamp": "2025-11-20T11:26:16.441843",
+    "n_samples_train": 30297,
+    "n_samples_test": 7575,
+    "n_features": 18,
+    "feature_names": [
+      "hour_of_day",
+      "day_of_week",
+      "is_weekend",
+      "hour_sin",
+      "hour_cos",
+      "day_sin",
+      "day_cos",
+      "month",
+      "shortage_price_lag_24h",
+      "shortage_price_lag_48h",
+      "shortage_price_lag_168h",
+      "shortage_price_rolling_mean_24h",
+      "shortage_price_rolling_std_24h",
+      "temperature_deg_c",
+      "wind_speed_m_per_s",
+      "cloud_cover_pct",
+      "precipitation_mm",
+      "global_radiation_w_per_m2"
+    ],
+    "n_iter": 2,
+    "cv_splits": 2,
+    "test_size_ratio": 0.2,
+    "random_state": 42,
+    "scoring": "neg_mean_squared_error",
+    "best_cv_score": -81722.80453461615,
+    "test_score": -0.08883291076757804,
+    "test_rmse": 191.8472439854233,
+    "best_params": {
+      "bootstrap": true,
+      "max_depth": 27,
+      "max_features": null,
+      "min_samples_leaf": 8,
+      "min_samples_split": 5,
+      "n_estimators": 153
+    },
+    "cv_results": {
+      "mean_test_scores": [
+        -82443.808022204,
+        -81722.80453461615
+      ],
+      "std_test_scores": [
+        3212.6375586072463,
+        1389.1061882991416
+      ],
+      "params": [
+        {
+          "bootstrap": true,
+          "max_depth": 24,
+          "max_features": "sqrt",
+          "min_samples_leaf": 8,
+          "min_samples_split": 8,
+          "n_estimators": 171
+        },
+        {
+          "bootstrap": true,
+          "max_depth": 27,
+          "max_features": null,
+          "min_samples_leaf": 8,
+          "min_samples_split": 5,
+          "n_estimators": 153
+        }
+      ]
+    }
+  }
+}
