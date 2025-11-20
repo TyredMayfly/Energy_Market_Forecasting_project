@@ -19,13 +19,16 @@ from app.models.linear_regression_model import LinearRegressionPriceModel
 from app.models.persistence_model import PersistencePriceModel
 from app.models.random_forest_model import RandomForestPriceModel
 from app.models.xgboost_classifier import RegulationStateXGBModel
+from app.models.hist_gradient_boosting_model import HistGradientBoostingPriceModel
 from app.services.data_store import load_market_data
+from app.services.data_validation import validate_and_align_market_weather_data
 from app.services.feature_engineering import (
     build_features_and_target,
     build_forecast_features,
 )
 from app.services.weather_data_manager import get_weather_manager
 from app.services.entsoe_data_updater import check_and_update_day_ahead_data
+from app.services.hyperparameter_service import load_best_params
 
 logger = get_logger(__name__)
 
@@ -76,7 +79,7 @@ class ForecastService:
         target_type = market_config.get("target_type", "regression")
 
         # Define which models support which target types
-        regression_models = {"persistence", "linear_regression", "random_forest"}
+        regression_models = {"persistence", "linear_regression", "random_forest", "hist_gradient_boosting"}
         classification_models = {"xgboost_classifier"}
 
         if target_type == "classification":
@@ -96,21 +99,40 @@ class ForecastService:
         """
         Create a model instance based on type.
 
+        Automatically loads tuned hyperparameters if available.
+
         Args:
             model_type: Type of model
-            market_type: Type of market (needed for classification models)
+            market_type: Type of market (needed for loading tuned hyperparameters)
 
         Returns:
             Model instance
         """
+        # Try to load tuned hyperparameters if market_type provided
+        tuned_params = None
+        if market_type and model_type != "persistence":
+            tuned_params = load_best_params(market_type=market_type, model_type=model_type)
+            if tuned_params:
+                logger.info(f"Loaded tuned hyperparameters for {model_type} on {market_type}")
+
         if model_type == "persistence":
             return PersistencePriceModel(method="last")
         elif model_type == "linear_regression":
+            if tuned_params:
+                return LinearRegressionPriceModel(**tuned_params)
             return LinearRegressionPriceModel()
         elif model_type == "random_forest":
+            if tuned_params:
+                return RandomForestPriceModel(**tuned_params)
             return RandomForestPriceModel()
         elif model_type == "xgboost_classifier":
+            if tuned_params:
+                return RegulationStateXGBModel(**tuned_params)
             return RegulationStateXGBModel()
+        elif model_type == "hist_gradient_boosting":
+            if tuned_params:
+                return HistGradientBoostingPriceModel(**tuned_params)
+            return HistGradientBoostingPriceModel()
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 

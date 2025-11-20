@@ -25,7 +25,12 @@ class RandomForestPriceModel:
         self,
         n_estimators: int = None,
         max_depth: int = None,
+        min_samples_split: int = None,
+        min_samples_leaf: int = None,
+        max_features: str = None,
+        bootstrap: bool = None,
         random_state: int = None,
+        **kwargs,  # Accept additional kwargs for compatibility
     ):
         """
         Initialize the random forest model.
@@ -33,18 +38,31 @@ class RandomForestPriceModel:
         Args:
             n_estimators: Number of trees (default from config)
             max_depth: Maximum tree depth (default from config)
+            min_samples_split: Minimum samples to split a node
+            min_samples_leaf: Minimum samples per leaf
+            max_features: Number of features to consider for splits
+            bootstrap: Whether to use bootstrap samples
             random_state: Random seed (default from config)
+            **kwargs: Additional parameters for compatibility
         """
         # Use defaults from config if not specified
         config = MODEL_TYPES.get("random_forest", {})
 
         self.n_estimators = n_estimators or config.get("n_estimators", 50)
         self.max_depth = max_depth or config.get("max_depth", 10)
+        self.min_samples_split = min_samples_split or config.get("min_samples_split", 2)
+        self.min_samples_leaf = min_samples_leaf or config.get("min_samples_leaf", 1)
+        self.max_features = max_features or config.get("max_features", "sqrt")
+        self.bootstrap = bootstrap if bootstrap is not None else config.get("bootstrap", True)
         self.random_state = random_state or config.get("random_state", 42)
 
         self.model_ = RandomForestRegressor(
             n_estimators=self.n_estimators,
             max_depth=self.max_depth,
+            min_samples_split=self.min_samples_split,
+            min_samples_leaf=self.min_samples_leaf,
+            max_features=self.max_features,
+            bootstrap=self.bootstrap,
             random_state=self.random_state,
             n_jobs=-1,  # Use all CPU cores
         )
@@ -112,6 +130,23 @@ class RandomForestPriceModel:
 
         return predictions
 
+    def score(self, X: pd.DataFrame, y: pd.Series) -> float:
+        """
+        Calculate R² score on the given data.
+
+        Args:
+            X: Feature matrix
+            y: True target values
+
+        Returns:
+            R² score
+        """
+        if not self.is_fitted_:
+            raise ValueError("Model must be fitted first")
+
+        X_eval = X[self.feature_names_].values
+        return self.model_.score(X_eval, y.values)
+
     def get_feature_importance(self) -> pd.DataFrame:
         """
         Get feature importances from the random forest.
@@ -138,6 +173,10 @@ class RandomForestPriceModel:
         return {
             "n_estimators": self.n_estimators,
             "max_depth": self.max_depth,
+            "min_samples_split": self.min_samples_split,
+            "min_samples_leaf": self.min_samples_leaf,
+            "max_features": self.max_features,
+            "bootstrap": self.bootstrap,
             "random_state": self.random_state,
         }
 
@@ -145,4 +184,16 @@ class RandomForestPriceModel:
         """Set model parameters (sklearn compatibility)."""
         for key, value in params.items():
             setattr(self, key, value)
+        # Recreate model with new params
+        self.model_ = RandomForestRegressor(
+            n_estimators=self.n_estimators,
+            max_depth=self.max_depth,
+            min_samples_split=self.min_samples_split,
+            min_samples_leaf=self.min_samples_leaf,
+            max_features=self.max_features,
+            bootstrap=self.bootstrap,
+            random_state=self.random_state,
+            n_jobs=-1,
+        )
+        self.is_fitted_ = False
         return self

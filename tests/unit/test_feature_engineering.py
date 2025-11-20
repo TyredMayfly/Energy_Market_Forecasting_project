@@ -122,27 +122,32 @@ class TestLagFeatures:
         
         result = create_lag_features(df, 'price')
         
-        # Default lags: [1, 2, 3, 24, 48, 168]
-        assert "price_lag_1h" in result.columns
+        # Default lags: [24, 48, 168]
         assert "price_lag_24h" in result.columns
+        assert "price_lag_48h" in result.columns
         assert "price_lag_168h" in result.columns
+        
+        # Short lags should NOT exist
+        assert "price_lag_1h" not in result.columns
+        assert "price_lag_2h" not in result.columns
+        assert "price_lag_3h" not in result.columns
 
     def test_lag_features_correctness(self):
         """Test that lag values are correct."""
         df = pd.DataFrame({
-            'timestamp_utc': pd.date_range('2025-01-01', periods=50, freq='h'),
-            'price': np.arange(50)
+            'timestamp_utc': pd.date_range('2025-01-01', periods=200, freq='h'),
+            'price': np.arange(200)
         })
         
-        result = create_lag_features(df, 'price', lag_hours=[1, 2])
+        result = create_lag_features(df, 'price', lag_hours=[24, 48])
         
-        # Lag 1 hour should shift by 1
-        assert result["price_lag_1h"].iloc[1] == 0
-        assert result["price_lag_1h"].iloc[2] == 1
+        # Lag 24 hours should shift by 24
+        assert result["price_lag_24h"].iloc[24] == 0
+        assert result["price_lag_24h"].iloc[25] == 1
         
-        # Lag 2 hours should shift by 2
-        assert result["price_lag_2h"].iloc[2] == 0
-        assert result["price_lag_2h"].iloc[3] == 1
+        # Lag 48 hours should shift by 48
+        assert result["price_lag_48h"].iloc[48] == 0
+        assert result["price_lag_48h"].iloc[49] == 1
 
     def test_lag_features_nan_handling(self, sample_timestamps):
         """Test that initial lag values are NaN."""
@@ -151,14 +156,15 @@ class TestLagFeatures:
             'price': np.arange(len(sample_timestamps))
         })
         
-        result = create_lag_features(df, 'price', lag_hours=[1, 24])
-        
-        # First value should be NaN for lag_1h
-        assert pd.isna(result["price_lag_1h"].iloc[0])
+        result = create_lag_features(df, 'price', lag_hours=[24, 48])
         
         # First 24 values should be NaN for lag_24h
         assert pd.isna(result["price_lag_24h"].iloc[0])
         assert pd.isna(result["price_lag_24h"].iloc[23])
+        
+        # First 48 values should be NaN for lag_48h
+        assert pd.isna(result["price_lag_48h"].iloc[0])
+        assert pd.isna(result["price_lag_48h"].iloc[47])
 
     def test_rolling_mean_feature(self, sample_timestamps):
         """Test rolling mean feature."""
@@ -167,7 +173,7 @@ class TestLagFeatures:
             'price': np.ones(len(sample_timestamps)) * 50
         })
         
-        result = create_lag_features(df, 'price', lag_hours=[1])
+        result = create_lag_features(df, 'price', lag_hours=[24])
         
         assert "price_rolling_mean_24h" in result.columns
         
@@ -207,7 +213,10 @@ class TestWeatherMerge:
         # Should preserve exact number of market rows (no duplicates from cartesian product)
         assert len(result) == len(sample_market_data)
         # All original market timestamps should be preserved
-        assert set(sample_market_data["timestamp_utc"]) == set(result["timestamp_utc"])
+        # Use sorted comparison instead of set to avoid expensive timezone-aware timestamp comparison
+        result_sorted = result["timestamp_utc"].sort_values().reset_index(drop=True)
+        market_sorted = sample_market_data["timestamp_utc"].sort_values().reset_index(drop=True)
+        assert result_sorted.equals(market_sorted)
 
     def test_merge_weather_with_none(self, mock_env_vars, sample_market_data):
         """Test merging when weather data is None."""
@@ -315,11 +324,16 @@ class TestBuildFeaturesAndTarget:
         """Test building features with custom lag hours."""
         save_market_data(sample_market_data, "day_ahead")
         
-        X, y = build_features_and_target("day_ahead", lag_hours=[1, 2, 3], include_weather=False)
+        X, y = build_features_and_target("day_ahead", lag_hours=[24, 48, 168], include_weather=False)
         
-        assert "price_eur_per_mwh_lag_1h" in X.columns
-        assert "price_eur_per_mwh_lag_2h" in X.columns
-        assert "price_eur_per_mwh_lag_3h" in X.columns
+        assert "price_eur_per_mwh_lag_24h" in X.columns
+        assert "price_eur_per_mwh_lag_48h" in X.columns
+        assert "price_eur_per_mwh_lag_168h" in X.columns
+        
+        # Short lags should NOT exist
+        assert "price_eur_per_mwh_lag_1h" not in X.columns
+        assert "price_eur_per_mwh_lag_2h" not in X.columns
+        assert "price_eur_per_mwh_lag_3h" not in X.columns
 
 
 class TestBuildForecastFeatures:
@@ -398,11 +412,12 @@ class TestBuildForecastFeatures:
             "day_ahead",
             forecast_start=forecast_start,
             horizon_hours=24,
-            lag_hours=[1, 24],
+            lag_hours=[24, 48],
             include_weather=False
         )
         
-        assert "price_eur_per_mwh_lag_1h" in X_forecast.columns
+        assert "price_eur_per_mwh_lag_24h" in X_forecast.columns
+        assert "price_eur_per_mwh_lag_48h" in X_forecast.columns
         assert "price_eur_per_mwh_lag_24h" in X_forecast.columns
 
     def test_build_forecast_features_with_weather(self, mock_env_vars, sample_market_data, sample_weather_data):

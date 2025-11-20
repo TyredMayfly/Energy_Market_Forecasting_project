@@ -43,12 +43,13 @@ class TestMarketDataSave:
         assert expected_file.exists()
 
     def test_save_market_data_preserves_timestamps(self, mock_env_vars, sample_market_data):
-        """Test that timestamps are properly formatted on save."""
+        """Test that timestamps are properly formatted on save with UTC timezone."""
         save_market_data(sample_market_data, "day_ahead")
 
         # Load and verify
         loaded = load_market_data("day_ahead")
-        assert loaded["timestamp_utc"].dtype == "datetime64[ns]"
+        assert loaded["timestamp_utc"].dt.tz is not None
+        assert str(loaded["timestamp_utc"].dt.tz) == "UTC"
 
     def test_save_all_market_types(self, mock_env_vars, sample_market_data):
         """Test saving all supported market types."""
@@ -217,12 +218,13 @@ class TestWeatherDataSave:
         assert expected_file.exists()
 
     def test_save_weather_data_preserves_timestamps(self, mock_env_vars, sample_weather_data):
-        """Test that timestamps are properly formatted on save."""
+        """Test that timestamps are properly formatted on save with UTC timezone."""
         save_weather_data(sample_weather_data)
 
         # Load and verify
         loaded = load_weather_data()
-        assert loaded.index.dtype == "datetime64[ns]"
+        assert loaded.index.tz is not None
+        assert str(loaded.index.tz) == "UTC"
 
 
 class TestWeatherDataLoad:

@@ -142,4 +142,16 @@ MODEL_TYPES = {
         "learning_rate": 0.1,
         "random_state": 42,
     },
+    "hist_gradient_boosting": {
+        "display_name": "Histogram Gradient Boosting",
+        "description": "Efficient gradient boosting regressor using histogram-based algorithm. Faster than traditional boosting with native support for missing values. Excellent for large datasets with non-linear patterns.",
+        "loss": "squared_error",
+        "learning_rate": 0.05,
+        "max_iter": 500,
+        "max_depth": 6,
+        "max_leaf_nodes": 31,
+        "min_samples_leaf": 50,
+        "l2_regularization": 0.0,
+        "random_state": 42,
+    },
 }

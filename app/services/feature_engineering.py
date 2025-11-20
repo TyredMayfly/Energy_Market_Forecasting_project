@@ -12,6 +12,7 @@ import pandas as pd
 from app.core.config import MARKET_TYPES, settings
 from app.core.logging import get_logger
 from app.services.data_store import load_market_data, load_weather_data
+from app.services.data_validation import validate_and_align_market_weather_data
 
 logger = get_logger(__name__)
 
@@ -57,13 +58,13 @@ def create_lag_features(
     Args:
         df: DataFrame sorted by timestamp
         value_column: Column name to create lags from
-        lag_hours: List of lag hours (default: [1, 2, 3, 24, 48, 168])
+        lag_hours: List of lag hours (default: [24, 48, 168])
 
     Returns:
         DataFrame with added lag features
     """
     if lag_hours is None:
-        lag_hours = [1, 2, 3, 24, 48, 168]  # 1h, 2h, 3h, 1d, 2d, 1w
+        lag_hours = [24, 48, 168]  # 1 day, 2 days, 1 week
 
     df = df.copy()
 
@@ -118,6 +119,10 @@ def merge_weather_data(
         weather_timestamp_col = "timestamp"
     else:
         weather_timestamp_col = "timestamp_utc"
+
+    # Store original timezone info to restore later
+    market_has_tz = df_market["timestamp_utc"].dt.tz is not None
+    original_tz = df_market["timestamp_utc"].dt.tz if market_has_tz else None
 
     # Ensure both market and weather timestamps have consistent timezone info
     # Convert to timezone-naive for merging (pandas merge requirement)
@@ -177,6 +182,10 @@ def merge_weather_data(
             f"Merged weather data: {df_merged[weather_cols].notna().sum().min()} valid records"
         )
 
+    # Restore original timezone information if it was present
+    if market_has_tz and original_tz is not None:
+        df_merged["timestamp_utc"] = df_merged["timestamp_utc"].dt.tz_localize(original_tz)
+
     return df_merged
 
 
@@ -191,7 +200,7 @@ def build_features_and_target(
 
     Args:
         market_type: Type of market ('day_ahead', 'imbalance_shortage', 'imbalance_surplus', 'regulation_state')
-        lag_hours: List of lag hours for price features (default: [1, 2, 3, 24, 48, 168])
+        lag_hours: List of lag hours for price features (default: [24, 48, 168])
         include_weather: Whether to include weather features
         weather_features: Dict specifying which weather features to include
             (e.g., {'temperature': True, 'wind_speed': True, 'cloud_cover': False, 'precipitation': False})
@@ -208,6 +217,19 @@ def build_features_and_target(
         logger.error(f"No market data available for {market_type}")
         return pd.DataFrame(), pd.Series(dtype=float)
 
+    # Load weather data if requested
+    df_weather = None
+    if include_weather:
+        df_weather = load_weather_data()
+    
+    # Validate and align timezones before processing
+    try:
+        df, df_weather = validate_and_align_market_weather_data(df, df_weather)
+    except (ValueError, Exception) as e:
+        logger.error(f"Data validation failed: {e}")
+        # Continue with potentially inconsistent data but log the error
+        # In production, you might want to raise the exception instead
+
     # Get target column name (price for regression, regulation_state for classification)
     target_column = MARKET_TYPES[market_type]["target_column"]
 
@@ -219,8 +241,8 @@ def build_features_and_target(
 
     # Auto-select lag hours for production
     if lag_hours is None:
-        # Production lags: 1h, 2h, 3h, 24h (1 day), 48h (2 days), 168h (1 week)
-        lag_hours = [1, 2, 3, 24, 48, 168]
+        # Production lags: 24h (1 day), 48h (2 days), 168h (1 week)
+        lag_hours = [24, 48, 168]
         logger.info(f"Using production lag features: {lag_hours}")
 
     # Create lag features
@@ -353,7 +375,7 @@ def build_forecast_features(
 
     # Use production lag hours (must match training)
     if lag_hours is None:
-        lag_hours = [1, 2, 3, 24, 48, 168]
+        lag_hours = [24, 48, 168]
 
     # Create lag features using last known values
     for lag in lag_hours:

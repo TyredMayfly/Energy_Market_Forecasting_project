@@ -15,6 +15,7 @@ import streamlit as st
 from app.core.config import MARKET_TYPES, MODEL_TYPES, settings
 from app.services.data_store import get_data_summary, load_market_data, load_weather_data
 from app.services.forecast_service import get_forecast_service, TrainingDataConfig
+from app.services.hyperparameter_service import load_best_params
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -109,6 +110,57 @@ def get_model_hyperparameters_ui(model_type: str) -> Dict:
                 help="Random state for reproducibility",
             )
 
+    elif model_type == "hist_gradient_boosting":
+        st.markdown("**Histogram Gradient Boosting Settings**")
+        col1, col2 = st.columns(2)
+        with col1:
+            hyperparams["max_iter"] = st.slider(
+                "Max iterations",
+                min_value=100,
+                max_value=1000,
+                value=500,
+                step=50,
+                help="Maximum number of boosting iterations",
+            )
+            hyperparams["learning_rate"] = st.slider(
+                "Learning rate",
+                min_value=0.01,
+                max_value=0.3,
+                value=0.05,
+                step=0.01,
+                help="Learning rate shrinks contribution of each tree",
+            )
+            hyperparams["max_depth"] = st.slider(
+                "Max tree depth",
+                min_value=3,
+                max_value=15,
+                value=6,
+                help="Maximum depth of each tree (None for unlimited)",
+            )
+        with col2:
+            hyperparams["max_leaf_nodes"] = st.slider(
+                "Max leaf nodes",
+                min_value=15,
+                max_value=100,
+                value=31,
+                help="Maximum number of leaves per tree",
+            )
+            hyperparams["min_samples_leaf"] = st.slider(
+                "Min samples per leaf",
+                min_value=10,
+                max_value=100,
+                value=50,
+                help="Minimum samples required at a leaf node",
+            )
+            hyperparams["l2_regularization"] = st.slider(
+                "L2 regularization",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.0,
+                step=0.1,
+                help="L2 regularization parameter",
+            )
+
     elif model_type == "xgboost_classifier":
         st.markdown("**XGBoost Classifier Settings**")
         col1, col2 = st.columns(2)
@@ -180,7 +232,7 @@ def get_forecast_configuration() -> Optional[Dict]:
             target_type = MARKET_TYPES[market_type].get("target_type", "regression")
 
             # Define which models support which target types
-            regression_models = ["persistence", "linear_regression", "random_forest"]
+            regression_models = ["persistence", "linear_regression", "random_forest", "hist_gradient_boosting"]
             classification_models = ["xgboost_classifier"]
 
             if target_type == "classification":
@@ -204,7 +256,22 @@ def get_forecast_configuration() -> Optional[Dict]:
 
         with col1:
             st.subheader("3️⃣ Model Hyperparameters")
-            hyperparameters = get_model_hyperparameters_ui(model_type)
+            
+            # Check if tuned hyperparameters are available
+            tuned_params = load_best_params(market_type=market_type, model_type=model_type)
+            
+            if tuned_params:
+                st.success(f"✅ Using optimized hyperparameters from search")
+                with st.expander("📊 View Tuned Parameters", expanded=False):
+                    st.json(tuned_params)
+                st.info("💡 The forecast will automatically use these optimized parameters. The model was tuned using cross-validation on historical data.")
+            else:
+                st.info("ℹ️ No tuned hyperparameters found. Using default values.")
+                st.caption("Run hyperparameter search to optimize model performance.")
+            
+            # Note: Hyperparameters are loaded automatically by forecast service
+            # UI controls removed - they weren't being used anyway
+            hyperparameters = {}  # Placeholder for config compatibility
 
         with col2:
             st.subheader("4️⃣ Training Data Sources")
@@ -1135,7 +1202,7 @@ def render_welcome_screen():
         ### Get Started
         
         1. **Select your market**: Choose from Day-Ahead or Imbalance markets (shortage/surplus prices, regulation state)
-        2. **Pick a model**: Try Persistence, Linear Regression, Random Forest, or XGBoost Classifier (for regulation state)
+        2. **Pick a model**: Try Persistence, Linear Regression, Random Forest, Histogram Gradient Boosting, or XGBoost Classifier (for regulation state)
         3. **Configure settings**: Adjust hyperparameters and training data sources
         4. **Set your horizon**: Forecast 1-36 hours ahead
         5. **Click "Run Forecast"**: Generate and visualize predictions

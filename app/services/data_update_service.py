@@ -21,6 +21,7 @@ from app.services.data_store import (
     save_market_data,
     save_weather_data,
 )
+from app.services.data_validation import validate_and_align_market_weather_data
 from app.services.entsoe_client import EntsoeClient
 from app.services.meteosource_client import MeteosourceClient
 
@@ -29,20 +30,22 @@ logger = get_logger(__name__)
 
 def initialize_historical_data_2025() -> bool:
     """
-    Initialize historical data for 2025 from the beginning of the year until today.
+    Initialize historical data from October 2024 until today.
 
-    Downloads all available data from ENTSO-E and Meteosource for 2025.
+    Downloads all available data from ENTSO-E and Meteosource starting from Oct 1, 2024.
     Note: Meteosource free tier provides 24-hour forecasts only.
 
     Returns:
         True if successful, False otherwise
     """
     logger.info("=" * 80)
-    logger.info("Starting historical data initialization for 2025")
+    logger.info("Starting historical data initialization from Oct 2024")
     logger.info("=" * 80)
 
-    start_date = datetime(2025, 1, 1, 0, 0, 0)
-    end_date = datetime.utcnow()
+    import pandas as pd
+    
+    start_date = datetime(2024, 10, 1, 0, 0, 0, tzinfo=pd.Timestamp.now(tz="UTC").tzinfo)
+    end_date = pd.Timestamp.now(tz="UTC").to_pydatetime()
 
     success = True
 

@@ -130,8 +130,8 @@ class EntsoeClient:
             if start_elem is None or start_elem.text is None:
                 continue
 
-            # Parse start time
-            period_start = pd.to_datetime(start_elem.text)
+            # Parse start time (ENTSO-E times are in UTC)
+            period_start = pd.to_datetime(start_elem.text, utc=True)
 
             # Get resolution (e.g., PT60M for 60 minutes)
             resolution_elem = period.find(f"{ns_prefix}:resolution", self.namespaces)
@@ -252,17 +252,17 @@ class EntsoeClient:
         self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
     ) -> pd.DataFrame:
         """
-        Fetch day-ahead market prices for the Netherlands in 2025.
+        Fetch day-ahead market prices for the Netherlands.
 
         Args:
-            start_date: Start date (default: 2025-01-01)
+            start_date: Start date (default: 2024-10-01)
             end_date: End date (default: today)
 
         Returns:
             DataFrame with day-ahead prices
         """
         if start_date is None:
-            start_date = datetime(2025, 1, 1, 0, 0, 0)
+            start_date = datetime(2024, 10, 1, 0, 0, 0)
         if end_date is None:
             end_date = datetime.utcnow()
 
@@ -273,19 +273,19 @@ class EntsoeClient:
         self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
     ) -> pd.DataFrame:
         """
-        Fetch imbalance prices for the Netherlands in 2025.
+        Fetch imbalance prices for the Netherlands.
 
         Args:
-            start_date: Start date (default: 2025-01-01)
+            start_date: Start date (default: 2024-10-01)
             end_date: End date (default: today)
 
         Returns:
             DataFrame with imbalance prices (document type A85)
         """
         if start_date is None:
-            start_date = datetime(2025, 1, 1, 0, 0, 0)
+            start_date = datetime(2024, 10, 1, 0, 0, 0, tzinfo=pd.Timestamp.now(tz="UTC").tzinfo)
         if end_date is None:
-            end_date = datetime.utcnow()
+            end_date = pd.Timestamp.now(tz="UTC").to_pydatetime()
 
         logger.info("Fetching imbalance prices for Netherlands")
         return self._fetch_data("A85", "imbalance", start_date, end_date)

@@ -112,6 +112,23 @@ class LinearRegressionPriceModel:
 
         return importance_df
 
+    def score(self, X: pd.DataFrame, y: pd.Series) -> float:
+        """
+        Calculate R² score on given data.
+
+        Args:
+            X: Feature matrix
+            y: True target values
+
+        Returns:
+            R² score
+        """
+        if not self.is_fitted_:
+            raise ValueError("Model must be fitted first")
+
+        X_eval = X[self.feature_names_].values
+        return self.model_.score(X_eval, y.values)
+
     def get_params(self, deep: bool = True) -> dict:
         """Get model parameters (sklearn compatibility)."""
         return {"fit_intercept": self.fit_intercept}

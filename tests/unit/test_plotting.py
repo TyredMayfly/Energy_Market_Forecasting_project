@@ -267,7 +267,7 @@ class TestFeatureImportancePlots:
     
     def test_horizontal_bar_chart(self):
         """Test horizontal bar chart for feature importance."""
-        features = ['price_lag_1h', 'hour_of_day', 'temperature_deg_c', 'wind_speed_m_per_s']
+        features = ['price_lag_24h', 'hour_of_day', 'temperature_deg_c', 'wind_speed_m_per_s']
         importance = [0.45, 0.25, 0.20, 0.10]
         
         fig = go.Figure([
@@ -331,7 +331,7 @@ class TestCoefficientVisualization:
     def test_equation_string_formatting(self):
         """Test formatting of regression equation."""
         intercept = 25.5
-        features = ['price_lag_1h', 'hour_of_day']
+        features = ['price_lag_24h', 'hour_of_day']
         coefficients = [0.85, -1.2]
         
         # Build equation
@@ -343,7 +343,7 @@ class TestCoefficientVisualization:
         equation = "Price = " + " ".join(eq_parts)
         
         assert "25.50" in equation
-        assert "+ 0.85 × price_lag_1h" in equation
+        assert "+ 0.85 × price_lag_24h" in equation
         assert "- 1.20 × hour_of_day" in equation
         assert equation.startswith("Price = ")
 

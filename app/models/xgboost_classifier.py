@@ -348,3 +348,38 @@ class RegulationStateXGBModel:
         self._idx_to_state = model_data["idx_to_state"]
 
         logger.info(f"Model loaded from {filepath}")
+
+    def get_params(self, deep: bool = True) -> dict:
+        """Get model parameters (sklearn compatibility)."""
+        return self.params.copy()
+
+    def set_params(self, **params) -> "RegulationStateXGBModel":
+        """Set model parameters (sklearn compatibility)."""
+        self.params.update(params)
+        # Update individual attributes for commonly used params
+        if "n_estimators" in params:
+            self.params["n_estimators"] = params["n_estimators"]
+        if "max_depth" in params:
+            self.params["max_depth"] = params["max_depth"]
+        if "learning_rate" in params:
+            self.params["learning_rate"] = params["learning_rate"]
+        # Recreate model with new params
+        self.model = xgb.XGBClassifier(**self.params)
+        return self
+
+    def score(self, X: pd.DataFrame, y: pd.Series) -> float:
+        """
+        Calculate accuracy score on the given data.
+
+        Args:
+            X: Feature matrix
+            y: True target values
+
+        Returns:
+            Accuracy score
+        """
+        if self.model is None:
+            raise ValueError("Model not trained. Call fit() first.")
+
+        y_pred = self.predict(X)
+        return accuracy_score(y, y_pred)

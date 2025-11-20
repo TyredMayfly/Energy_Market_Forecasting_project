@@ -144,8 +144,8 @@ class KNMIHistoricalClient:
             date_str = str(int(row["YYYYMMDD"]))
             hour = int(row["HH"])
 
-            # Parse base date
-            base_date = pd.to_datetime(date_str, format="%Y%m%d")
+            # Parse base date (KNMI timestamps are in UTC)
+            base_date = pd.to_datetime(date_str, format="%Y%m%d", utc=True)
 
             # Handle hour 24 (midnight of next day)
             if hour == 24:
@@ -181,26 +181,32 @@ class KNMIHistoricalClient:
 
         # Temperature: 0.1 °C → °C
         if "T" in df.columns:
-            result["temperature_deg_c"] = df["T"] / 10.0
+            result["temperature_deg_c"] = pd.to_numeric(df["T"], errors="coerce") / 10.0
 
         # Wind speed: 0.1 m/s → m/s
         if "FH" in df.columns:
-            result["wind_speed_m_per_s"] = df["FH"] / 10.0
+            result["wind_speed_m_per_s"] = pd.to_numeric(df["FH"], errors="coerce") / 10.0
 
         # Global radiation: J/cm²/h → W/m²
         # 1 J/cm²/h = 10000 J/m²/h = 10000/3600 W/m² ≈ 2.78 W/m²
         if "Q" in df.columns:
-            result["global_radiation_w_per_m2"] = df["Q"] * 10000 / 3600
+            result["global_radiation_w_per_m2"] = (
+                pd.to_numeric(df["Q"], errors="coerce") * 10000 / 3600
+            )
 
         # Cloud cover: oktas (0-8) → percentage
         # 0 oktas = 0%, 1 okta = 12.5%, ..., 8 oktas = 100%
         if "N" in df.columns:
-            cloud_oktas = df["N"].replace(9, pd.NA)  # 9 = sky invisible
+            # Convert to numeric, coercing errors to NaN
+            cloud_oktas = pd.to_numeric(df["N"], errors="coerce")
+            cloud_oktas = cloud_oktas.replace(9, float("nan"))  # 9 = sky invisible
             result["cloud_cover_pct"] = (cloud_oktas / 8.0 * 100).round(0)
 
         # Precipitation: 0.1 mm → mm
         if "RH" in df.columns:
-            precip = df["RH"].replace(-1, 0)  # -1 means <0.05 mm
+            # Convert to numeric, coercing errors to NaN
+            precip = pd.to_numeric(df["RH"], errors="coerce")
+            precip = precip.replace(-1, 0)  # -1 means <0.05 mm
             result["precipitation_mm"] = precip / 10.0
 
         # Add metadata
@@ -214,7 +220,7 @@ class KNMIHistoricalClient:
 
     def fetch_historical_for_2025(self, end_date: Optional[datetime] = None) -> pd.DataFrame:
         """
-        Fetch all historical hourly data from Jan 1, 2025 to specified end date.
+        Fetch all historical hourly data from Oct 1, 2024 to specified end date.
 
         Args:
             end_date: End date (default: now)
@@ -222,8 +228,8 @@ class KNMIHistoricalClient:
         Returns:
             DataFrame with standardized hourly weather data
         """
-        start = datetime(2025, 1, 1, 1)  # Jan 1, 2025, 01:00
-        end = end_date or datetime.now()
+        start = datetime(2024, 10, 1, 1, tzinfo=pd.Timestamp.now(tz="UTC").tzinfo)  # Oct 1, 2024, 01:00 UTC
+        end = end_date or pd.Timestamp.now(tz="UTC").to_pydatetime()
 
         # Fetch raw data (exclude U:P to match Meteosource free tier)
         raw_df = self.fetch_hourly_data(start, end, variables="T:FH:Q:N:RH")

@@ -44,19 +44,20 @@ class TestFeatureEngineering:
 
         df = pd.DataFrame({"timestamp_utc": timestamps, "price_eur_per_mwh": prices})
 
-        lag_hours = [1, 24]
+        lag_hours = [24, 48]
         df_lagged = create_lag_features(df, "price_eur_per_mwh", lag_hours)
 
         # Check that lag features are added
-        assert "price_eur_per_mwh_lag_1h" in df_lagged.columns
         assert "price_eur_per_mwh_lag_24h" in df_lagged.columns
+        assert "price_eur_per_mwh_lag_48h" in df_lagged.columns
         assert "price_eur_per_mwh_rolling_mean_24h" in df_lagged.columns
 
-        # Check that lag values are correct
-        assert df_lagged["price_eur_per_mwh_lag_1h"].iloc[1] == df["price_eur_per_mwh"].iloc[0]
+        # Check that lag values are correct (lag 24 = 24 hours back)
+        assert df_lagged["price_eur_per_mwh_lag_24h"].iloc[24] == df["price_eur_per_mwh"].iloc[0]
 
-        # Check that first values are NaN (no data to lag from)
-        assert pd.isna(df_lagged["price_eur_per_mwh_lag_1h"].iloc[0])
+        # Check that first 24 values are NaN (no data to lag from)
+        assert pd.isna(df_lagged["price_eur_per_mwh_lag_24h"].iloc[0])
+        assert pd.isna(df_lagged["price_eur_per_mwh_lag_24h"].iloc[23])
 
     def test_merge_weather_data(self):
         """Test merging weather data with market data."""

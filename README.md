@@ -37,7 +37,7 @@ Data scientists, energy market analysts, students, and professionals interested 
 - **ML Framework**: scikit-learn (LinearRegression, RandomForestRegressor)
 - **Data Processing**: pandas, numpy
 - **Data Sources**: ENTSO-E Transparency Platform, KNMI Open Data API
-- **Testing**: pytest (205 tests, 100% passing)
+- **Testing**: pytest (363 tests, 100% passing)
 - **Deployment**: Streamlit Cloud
 
 ## Quick Start
@@ -99,13 +99,27 @@ The app will be available at http://localhost:8501
   /core             # Configuration, logging (Pydantic v2)
   /models           # ML model implementations (Persistence, LinearRegression, RandomForest, XGBoost)
   /services         # Data loading, feature engineering, forecast generation, auto-updates
+/artifacts          # Hyperparameter search results (model tuning)
+  /hyperparameter_search/
+    ├── summary.csv              # Global search results
+    ├── hyperparams_defaults.json  # Recommended defaults
+    ├── plots/                   # Analysis visualizations
+    └── <market>/<model>_*.json/csv  # Per-combination results
 /data               # Market and weather data files (auto-updated)
   ├── entsoe_day_ahead_prices_2025.csv
   ├── imbalance_unified.csv
   └── weather_data_2025.csv
-/tests              # 246 pytest tests (unit + integration)
+/tests              # 312 pytest tests (unit + integration)
   /unit             # Component-level tests
   /integration      # End-to-end feature tests
+/scripts            # Utility scripts (hyperparameter search, data updates)
+  ├── run_full_hyperparam_search.py  # Full hyperparameter search pipeline
+  ├── analyze_hyperparams.py         # Analysis and recommendations
+  └── search_hyperparameters.py      # Individual model search
+/examples           # Example usage scripts
+/docs               # Additional documentation
+  ├── FULL_HYPERPARAM_PIPELINE.md  # Complete hyperparameter search & analysis guide
+  └── HYPERPARAMETER_SEARCH.md     # Individual model hyperparameter tuning
 /.streamlit         # Streamlit Cloud configuration
 streamlit_app.py    # Main application entry point
 requirements.txt    # Production dependencies
@@ -147,6 +161,39 @@ Uses historical prices, time-based features (hour, day of week, weekend), and se
 
 ### 3. Random Forest
 Ensemble model using sklearn's `RandomForestRegressor` with 50 trees. Captures non-linear relationships between features and prices.
+
+### 4. Histogram Gradient Boosting
+Efficient gradient boosting regressor using sklearn's `HistGradientBoostingRegressor`. Uses histogram-based algorithm for faster training on large datasets while maintaining high accuracy. Native support for missing values and excellent performance on non-linear patterns.
+
+### 5. XGBoost Classifier
+Gradient boosting classifier for predicting regulation states (UP, DOWN, BALANCED, UP_AND_DOWN) in imbalance markets. Uses advanced ensemble learning.
+
+## Hyperparameter Tuning
+
+The project includes a comprehensive hyperparameter search pipeline for optimizing all model × market combinations:
+
+```bash
+# Search all combinations
+python scripts/search_hyperparameters.py
+
+# Search specific market
+python scripts/search_hyperparameters.py --market day_ahead
+
+# Quick search (reduced iterations)
+python scripts/search_hyperparameters.py --n-iter 20 --cv-splits 3
+
+# List available tuned models
+python scripts/search_hyperparameters.py --list
+```
+
+**Features:**
+- Time-series cross-validation (respects temporal ordering)
+- RandomizedSearchCV with customizable iterations
+- Automatic parameter grid definition per model type
+- Results saved to `artifacts/hyperparameter_search/`
+- Automatic loading of tuned parameters during training
+
+For full documentation, see: [docs/HYPERPARAMETER_SEARCH.md](docs/HYPERPARAMETER_SEARCH.md)
 
 **Parameters:**
 - n_estimators: 50
@@ -225,13 +272,20 @@ To deploy your own instance:
 ## Contributing
 
 Contributions are welcome! Areas of interest:
-- Additional forecasting models (ARIMA, LSTM, XGBoost)
+- Additional forecasting models (ARIMA, LSTM, Prophet)
 - Enhanced feature engineering
-- Model hyperparameter optimization
+- Model hyperparameter optimization (see `docs/FULL_HYPERPARAM_PIPELINE.md`)
 - Extended test coverage
 - Documentation improvements
 
 Please open an issue or pull request on GitHub.
+
+## Documentation
+
+- **[FULL_HYPERPARAM_PIPELINE.md](docs/FULL_HYPERPARAM_PIPELINE.md)** - Comprehensive hyperparameter search and analysis pipeline
+- **[HYPERPARAMETER_SEARCH.md](docs/HYPERPARAMETER_SEARCH.md)** - Individual model hyperparameter tuning guide
+- **[QUICKSTART.md](QUICKSTART.md)** - Quick start guide for local development
+- **[PROJECT_CONTEXT.md](PROJECT_CONTEXT.md)** - Complete project context and architecture
 
 ## License
 
