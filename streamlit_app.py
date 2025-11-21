@@ -1160,97 +1160,97 @@ def render_results_section(
         if model_info:
             st.write(f"**Model:** {MODEL_TYPES[config['model_type']]['display_name']}")
             st.write(f"**Trained at:** {model_info['trained_at']}")
-                st.write(f"**Training samples:** {model_info['n_samples']}")
-                st.write(f"**Features used:** {len(model_info['feature_columns'])}")
+            st.write(f"**Training samples:** {model_info['n_samples']}")
+            st.write(f"**Features used:** {len(model_info['feature_columns'])}")
 
-                # Model-specific statistics
-                if config["model_type"] == "random_forest" and "feature_importance" in model_info:
-                    st.markdown("---")
-                    st.markdown("### Feature Importance")
-                    importance_data = model_info["feature_importance"]
+            # Model-specific statistics
+            if config["model_type"] == "random_forest" and "feature_importance" in model_info:
+                st.markdown("---")
+                st.markdown("### Feature Importance")
+                importance_data = model_info["feature_importance"]
 
-                    # Create bar chart
-                    top_n = min(15, len(importance_data["features"]))
-                    fig_importance = go.Figure(
-                        [
-                            go.Bar(
-                                x=importance_data["importance"][:top_n],
-                                y=importance_data["features"][:top_n],
-                                orientation="h",
-                                marker=dict(color="#1f77b4"),
-                            )
-                        ]
-                    )
-                    fig_importance.update_layout(
-                        title=f"Top {top_n} Most Important Features",
-                        xaxis_title="Importance Score",
-                        yaxis_title="Feature",
-                        height=400,
-                        yaxis={"categoryorder": "total ascending"},
-                    )
-                    st.plotly_chart(fig_importance, width="stretch")
-
-                    # Show numerical values
-                    with st.expander("View All Feature Importance Values"):
-                        import_df = pd.DataFrame(
-                            {
-                                "Feature": importance_data["features"],
-                                "Importance": [
-                                    f"{imp:.6f}" for imp in importance_data["importance"]
-                                ],
-                            }
+                # Create bar chart
+                top_n = min(15, len(importance_data["features"]))
+                fig_importance = go.Figure(
+                    [
+                        go.Bar(
+                            x=importance_data["importance"][:top_n],
+                            y=importance_data["features"][:top_n],
+                            orientation="h",
+                            marker=dict(color="#1f77b4"),
                         )
-                        st.dataframe(import_df, hide_index=True, height=400)
-
-                elif config["model_type"] == "linear_regression" and "coefficients" in model_info:
-                    st.markdown("---")
-                    st.markdown("### Linear Regression Equation")
-
-                    # Display equation
-                    intercept = model_info.get("intercept", 0.0)
-                    coefficients = model_info.get("coefficients", [])
-                    features = model_info.get("feature_columns", [])
-
-                    st.write(f"**Intercept (β₀):** {intercept:.4f}")
-                    st.markdown("**Equation:**")
-
-                    # Build equation string
-                    eq_parts = [f"{intercept:.4f}"]
-                    for i, (feat, coef) in enumerate(zip(features[:10], coefficients[:10])):
-                        sign = "+" if coef >= 0 else "-"
-                        eq_parts.append(f"{sign} {abs(coef):.4f} × {feat}")
-
-                    equation = "Price = " + " ".join(eq_parts)
-                    if len(features) > 10:
-                        equation += f" + ... ({len(features)-10} more features)"
-
-                    st.code(equation, language="")
-
-                    # Show top coefficients
-                    st.markdown("**Top 10 Coefficients by Magnitude:**")
-                    coef_abs = [
-                        (feat, coef, abs(coef)) for feat, coef in zip(features, coefficients)
                     ]
-                    coef_abs.sort(key=lambda x: x[2], reverse=True)
+                )
+                fig_importance.update_layout(
+                    title=f"Top {top_n} Most Important Features",
+                    xaxis_title="Importance Score",
+                    yaxis_title="Feature",
+                    height=400,
+                    yaxis={"categoryorder": "total ascending"},
+                )
+                st.plotly_chart(fig_importance, width="stretch")
 
-                    coef_df = pd.DataFrame(
+                # Show numerical values
+                with st.expander("View All Feature Importance Values"):
+                    import_df = pd.DataFrame(
                         {
-                            "Feature": [x[0] for x in coef_abs[:10]],
-                            "Coefficient": [f"{x[1]:.6f}" for x in coef_abs[:10]],
-                            "Magnitude": [f"{x[2]:.6f}" for x in coef_abs[:10]],
+                            "Feature": importance_data["features"],
+                            "Importance": [
+                                f"{imp:.6f}" for imp in importance_data["importance"]
+                            ],
                         }
                     )
-                    st.dataframe(coef_df, hide_index=True)
+                    st.dataframe(import_df, hide_index=True, height=400)
 
-                    # Full coefficients in expander
-                    with st.expander("View All Coefficients"):
-                        all_coef_df = pd.DataFrame(
-                            {"Feature": features, "Coefficient": [f"{c:.6f}" for c in coefficients]}
-                        )
-                        st.dataframe(all_coef_df, hide_index=True, height=400)
+            elif config["model_type"] == "linear_regression" and "coefficients" in model_info:
+                st.markdown("---")
+                st.markdown("### Linear Regression Equation")
 
-                with st.expander("Feature Details"):
-                    st.write(model_info["feature_columns"])
+                # Display equation
+                intercept = model_info.get("intercept", 0.0)
+                coefficients = model_info.get("coefficients", [])
+                features = model_info.get("feature_columns", [])
+
+                st.write(f"**Intercept (β₀):** {intercept:.4f}")
+                st.markdown("**Equation:**")
+
+                # Build equation string
+                eq_parts = [f"{intercept:.4f}"]
+                for i, (feat, coef) in enumerate(zip(features[:10], coefficients[:10])):
+                    sign = "+" if coef >= 0 else "-"
+                    eq_parts.append(f"{sign} {abs(coef):.4f} × {feat}")
+
+                equation = "Price = " + " ".join(eq_parts)
+                if len(features) > 10:
+                    equation += f" + ... ({len(features)-10} more features)"
+
+                st.code(equation, language="")
+
+                # Show top coefficients
+                st.markdown("**Top 10 Coefficients by Magnitude:**")
+                coef_abs = [
+                    (feat, coef, abs(coef)) for feat, coef in zip(features, coefficients)
+                ]
+                coef_abs.sort(key=lambda x: x[2], reverse=True)
+
+                coef_df = pd.DataFrame(
+                    {
+                        "Feature": [x[0] for x in coef_abs[:10]],
+                        "Coefficient": [f"{x[1]:.6f}" for x in coef_abs[:10]],
+                        "Magnitude": [f"{x[2]:.6f}" for x in coef_abs[:10]],
+                    }
+                )
+                st.dataframe(coef_df, hide_index=True)
+
+                # Full coefficients in expander
+                with st.expander("View All Coefficients"):
+                    all_coef_df = pd.DataFrame(
+                        {"Feature": features, "Coefficient": [f"{c:.6f}" for c in coefficients]}
+                    )
+                    st.dataframe(all_coef_df, hide_index=True, height=400)
+
+            with st.expander("Feature Details"):
+                st.write(model_info["feature_columns"])
 
     with tab3:
         # This tab now shows additional feature importance details
