@@ -127,7 +127,7 @@ def update_market_data(market_type: str, now: datetime) -> bool:
             settlement_service = get_settlement_price_service()
             # Try to get latest prices (which will auto-refresh from TenneT API if stale)
             try:
-                latest_price = settlement_service.get_latest_price(price_type="shortage", current_time=now)
+                latest_price = settlement_service.get_latest_settlement_price(now=now, price_type="shortage")
                 if latest_price is not None:
                     logger.info(f"✓ Settlement prices refreshed via TenneT API")
                     return True

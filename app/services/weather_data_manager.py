@@ -8,7 +8,7 @@ Handles:
 - Merging historical data with new forecast
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -56,69 +56,94 @@ class WeatherDataManager:
             logger.error(f"Error loading weather data: {e}")
             return pd.DataFrame()
 
-    def check_forecast_freshness(self) -> Tuple[bool, Optional[datetime]]:
+    def check_forecast_coverage(self) -> Tuple[bool, Optional[datetime], Optional[datetime]]:
         """
-        Check if the current forecast data is fresh enough.
+        Check if the current forecast data has sufficient 24-hour coverage.
 
         Returns:
-            Tuple of (is_fresh, last_fetch_time)
-            - is_fresh: True if forecast is recent enough (< UPDATE_THRESHOLD_MINUTES old)
+            Tuple of (has_coverage, last_fetch_time, forecast_end_time)
+            - has_coverage: True if forecast extends at least 24 hours into the future
             - last_fetch_time: When the forecast was last fetched, or None if no data
+            - forecast_end_time: When the forecast data ends, or None if no data
         """
         df = self.load_weather_data()
 
         if df.empty:
             logger.info("No existing weather data found")
-            return False, None
+            return False, None, None
 
         # Check if fetch_timestamp column exists
         if "fetch_timestamp" not in df.columns:
             logger.warning("Weather data missing fetch_timestamp - needs update")
-            return False, None
+            return False, None, None
 
-        # Get the most recent fetch timestamp
         try:
-            last_fetch = pd.to_datetime(df["fetch_timestamp"]).max()
-
-            # Convert to datetime if it's a timestamp
+            # Get the most recent fetch timestamp - use utc=True to handle mixed timezones
+            last_fetch = pd.to_datetime(df["fetch_timestamp"], utc=True, format="ISO8601").max()
             if isinstance(last_fetch, pd.Timestamp):
                 last_fetch = last_fetch.to_pydatetime()
+            # Ensure timezone-aware
+            if last_fetch.tzinfo is None:
+                last_fetch = last_fetch.replace(tzinfo=timezone.utc)
 
-            # Check age
-            age_minutes = (datetime.utcnow() - last_fetch).total_seconds() / 60
-            is_fresh = age_minutes < self.UPDATE_THRESHOLD_MINUTES
+            # Get forecast end time (latest timestamp in the data)
+            forecast_end = df.index.max()
+            if isinstance(forecast_end, pd.Timestamp):
+                forecast_end = forecast_end.to_pydatetime()
+            # Ensure timezone-aware
+            if forecast_end.tzinfo is None:
+                forecast_end = forecast_end.replace(tzinfo=timezone.utc)
+
+            # Calculate coverage: how many hours into the future does the forecast extend?
+            now = datetime.now(timezone.utc)
+            hours_ahead = (forecast_end - now).total_seconds() / 3600
+            
+            # We need at least 24 hours of coverage
+            has_coverage = hours_ahead >= 24.0
+            
+            age_minutes = (now - last_fetch).total_seconds() / 60
 
             logger.info(
-                f"Forecast age: {age_minutes:.1f} minutes "
-                f"(threshold: {self.UPDATE_THRESHOLD_MINUTES} minutes)"
+                f"Forecast coverage: {hours_ahead:.1f} hours ahead "
+                f"(required: 24.0 hours, age: {age_minutes:.1f} minutes)"
+            )
+            logger.info(
+                f"Forecast extends from {df.index.min()} to {forecast_end}"
             )
 
-            return is_fresh, last_fetch
+            return has_coverage, last_fetch, forecast_end
 
         except Exception as e:
-            logger.error(f"Error checking forecast freshness: {e}")
-            return False, None
+            logger.error(f"Error checking forecast coverage: {e}")
+            return False, None, None
 
     def update_weather_data(self, force: bool = False) -> bool:
         """
         Update weather data with latest forecast if needed.
+        
+        This ensures we always have at least 24 hours of forecast data ahead.
 
         Args:
-            force: If True, update regardless of freshness
+            force: If True, update regardless of coverage
 
         Returns:
             True if data was updated, False otherwise
         """
         # Check if update is needed
         if not force:
-            is_fresh, last_fetch = self.check_forecast_freshness()
+            has_coverage, last_fetch, forecast_end = self.check_forecast_coverage()
 
-            if is_fresh:
+            if has_coverage:
                 logger.info(
-                    f"✓ Forecast is fresh (last update: {last_fetch.strftime('%Y-%m-%d %H:%M:%S') if last_fetch else 'unknown'})"
+                    f"✓ Forecast has sufficient 24h coverage (last update: {last_fetch.strftime('%Y-%m-%d %H:%M:%S') if last_fetch else 'unknown'})"
+                )
+                logger.info(
+                    f"  Forecast extends to: {forecast_end.strftime('%Y-%m-%d %H:%M:%S') if forecast_end else 'unknown'}"
                 )
                 logger.info("  Skipping update to save API calls")
                 return False
+            else:
+                logger.info("Forecast does not have 24-hour coverage - updating...")
 
         logger.info("Updating weather forecast...")
 
@@ -132,7 +157,7 @@ class WeatherDataManager:
 
             # Add metadata
             df_forecast["data_type"] = "forecast"
-            df_forecast["fetch_timestamp"] = datetime.utcnow()
+            df_forecast["fetch_timestamp"] = datetime.now(timezone.utc)
 
             logger.info(f"✓ Fetched {len(df_forecast)} hours of new forecast data")
 
@@ -145,6 +170,12 @@ class WeatherDataManager:
         # 2. Replace forecast period with new forecast
 
         if not df_existing.empty:
+            # Ensure both DataFrames have matching timezone info
+            if df_existing.index.tz is None:
+                df_existing.index = df_existing.index.tz_localize("UTC")
+            if df_forecast.index.tz is None:
+                df_forecast.index = df_forecast.index.tz_localize("UTC")
+            
             # Find where forecast starts
             forecast_start = df_forecast.index.min()
 
@@ -171,11 +202,17 @@ class WeatherDataManager:
             # Ensure directory exists
             self.data_file.parent.mkdir(parents=True, exist_ok=True)
 
+            # Ensure index is timezone-aware before sorting
+            if not hasattr(df_combined.index, 'tz') or df_combined.index.tz is None:
+                if isinstance(df_combined.index, pd.DatetimeIndex):
+                    df_combined.index = df_combined.index.tz_localize("UTC")
+            
             # Sort by timestamp
             df_combined = df_combined.sort_index()
 
-            # Save
-            df_combined.to_csv(self.data_file)
+            # Reset index to save timestamp as column (for compatibility with load_weather_data)
+            df_to_save = df_combined.reset_index().rename(columns={'index': 'timestamp'})
+            df_to_save.to_csv(self.data_file, index=False)
 
             logger.info(f"✓ Updated weather data saved to {self.data_file}")
             logger.info(f"  Date range: {df_combined.index.min()} to {df_combined.index.max()}")
@@ -228,7 +265,7 @@ class WeatherDataManager:
         )
 
         # Get forecast info
-        is_fresh, last_fetch = self.check_forecast_freshness()
+        has_coverage, last_fetch, forecast_end = self.check_forecast_coverage()
 
         return {
             "exists": True,
@@ -238,7 +275,8 @@ class WeatherDataManager:
             "date_range_start": df.index.min(),
             "date_range_end": df.index.max(),
             "last_fetch": last_fetch,
-            "is_fresh": is_fresh,
+            "has_24h_coverage": has_coverage,
+            "forecast_end": forecast_end,
             "file_path": str(self.data_file),
         }
 

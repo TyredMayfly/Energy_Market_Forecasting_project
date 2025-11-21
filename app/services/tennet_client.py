@@ -61,12 +61,13 @@ class TennetClient:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         }
 
-        # Only add Authorization header if API key is present and non-empty
+        # Only add API key header if API key is present and non-empty
         if self.api_key and self.api_key.strip():
-            # TenneT uses API key in Authorization header with Bearer scheme
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            # TenneT uses 'apikey' header as per OpenAPI spec
+            headers["apikey"] = self.api_key
 
         return headers
 
@@ -132,40 +133,46 @@ class TennetClient:
             TennetApiError: If data parsing fails
         """
         try:
-            # API returns data in various formats depending on endpoint
-            # Most common: {"data": [...]} or direct array [...]
-            records = data.get("data", data) if isinstance(data, dict) else data
-
-            if not records:
-                logger.warning("No settlement price data returned from API")
+            # Parse the nested JSON structure from TenneT API
+            # Structure: {"Response": {"TimeSeries": [{"Period": {"Points": [...]}}]}}
+            if not isinstance(data, dict):
+                logger.warning("API response is not a dictionary")
+                return pd.DataFrame()
+            
+            # Navigate to the Points array
+            response = data.get("Response", {})
+            time_series = response.get("TimeSeries", [])
+            
+            if not time_series:
+                logger.warning("No TimeSeries data in API response")
+                return pd.DataFrame()
+            
+            # Collect all points from all time series
+            all_points = []
+            for series in time_series:
+                period = series.get("Period", {})
+                points = period.get("Points", [])
+                all_points.extend(points)
+            
+            if not all_points:
+                logger.warning("No Points data in API response")
                 return pd.DataFrame()
 
             # Convert to DataFrame
-            df = pd.DataFrame(records)
+            df = pd.DataFrame(all_points)
 
-            # Standardize column names based on TenneT API schema
-            # API uses fields like: timeinterval_start, shortage_price, surplus_price, etc.
+            # Map API field names to our standard column names
             column_mapping = {
-                "timeinterval_start": "timestamp_utc",
-                "timeintervalStart": "timestamp_utc",
-                "Timeinterval Start Loc": "timestamp_utc",
-                "shortage_price": "shortage_price",
-                "shortagePrice": "shortage_price",
-                "Price Shortage": "shortage_price",
-                "surplus_price": "surplus_price",
-                "surplusPrice": "surplus_price",
-                "Price Surplus": "surplus_price",
+                "timeInterval_start": "timestamp_utc",
+                "shortage": "shortage_price",
+                "surplus": "surplus_price",
                 "regulation_state": "regulation_state",
-                "regulationState": "regulation_state",
-                "Regulation State": "regulation_state",
             }
 
-            # Rename columns that exist
-            for old_col, new_col in column_mapping.items():
-                if old_col in df.columns:
-                    df = df.rename(columns={old_col: new_col})
+            # Rename columns
+            df = df.rename(columns=column_mapping)
 
-            # Ensure timestamp column exists
+            # Ensure required columns exist
             if "timestamp_utc" not in df.columns:
                 raise TennetApiError("No timestamp column found in API response")
 
@@ -176,6 +183,10 @@ class TennetClient:
             for price_col in ["shortage_price", "surplus_price"]:
                 if price_col in df.columns:
                     df[price_col] = pd.to_numeric(df[price_col], errors="coerce")
+
+            # Convert regulation_state to int
+            if "regulation_state" in df.columns:
+                df["regulation_state"] = pd.to_numeric(df["regulation_state"], errors="coerce").astype("Int64")
 
             # Select and order columns
             standard_cols = ["timestamp_utc", "shortage_price", "surplus_price", "regulation_state"]
@@ -219,7 +230,7 @@ class TennetClient:
         params = {"limit": limit}
 
         try:
-            data = self._make_request("settlement-prices/latest", params=params)
+            data = self._make_request("publications/v1/settlement-prices/latest", params=params)
             df = self._parse_settlement_data(data)
 
             logger.info(f"Successfully fetched {len(df)} latest settlement prices")
@@ -260,29 +271,49 @@ class TennetClient:
 
         logger.info(f"Fetching settlement prices from {start_utc} to {end_utc}")
 
-        # Format dates for API (ISO 8601)
-        params = {
-            "from": start_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "to": end_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        }
-
-        try:
-            data = self._make_request("settlement-prices", params=params)
-            df = self._parse_settlement_data(data)
-
-            # Filter to exact range (API might return broader range)
-            if not df.empty:
-                df = df[
-                    (df["timestamp_utc"] >= start_utc) & (df["timestamp_utc"] <= end_utc)
-                ].reset_index(drop=True)
-
+        # API has 1-hour maximum range per request, so we need to chunk the requests
+        all_dfs = []
+        current_start = start_utc
+        
+        while current_start < end_utc:
+            # Calculate chunk end (max 1 hour from current start)
+            chunk_end = min(current_start + timedelta(hours=1), end_utc)
+            
+            # Format dates for API (dd-mm-yyyy hh24:mi:ss format as per spec)
+            params = {
+                "date_from": current_start.strftime("%d-%m-%Y %H:%M:%S"),
+                "date_to": chunk_end.strftime("%d-%m-%Y %H:%M:%S"),
+            }
+            
+            logger.debug(f"Fetching chunk: {params['date_from']} to {params['date_to']}")
+            
+            try:
+                data = self._make_request("publications/v1/settlement-prices", params=params)
+                
+                # Handle "no data" response
+                if isinstance(data, dict) and data.get("error") == "No data found":
+                    logger.debug(f"No data for chunk {params['date_from']} to {params['date_to']}")
+                else:
+                    df_chunk = self._parse_settlement_data(data)
+                    if not df_chunk.empty:
+                        all_dfs.append(df_chunk)
+                        
+            except TennetApiError as e:
+                logger.warning(f"Error fetching chunk {params['date_from']} to {params['date_to']}: {e}")
+            
+            # Move to next chunk
+            current_start = chunk_end
+        
+        # Combine all chunks
+        if all_dfs:
+            df = pd.concat(all_dfs, ignore_index=True)
+            # Remove duplicates and sort
+            df = df.drop_duplicates(subset=["timestamp_utc"]).sort_values("timestamp_utc").reset_index(drop=True)
             logger.info(f"Successfully fetched {len(df)} settlement prices for date range")
             return df
-
-        except TennetApiError:
-            raise
-        except Exception as e:
-            raise TennetApiError(f"Unexpected error fetching price range: {e}")
+        else:
+            logger.warning("No data fetched for the requested range")
+            return pd.DataFrame()
 
 
 # Module-level instance for convenience

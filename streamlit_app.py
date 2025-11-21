@@ -17,9 +17,27 @@ from app.services.data_store import get_data_summary, load_market_data, load_wea
 from app.services.forecast_service import get_forecast_service, TrainingDataConfig
 from app.services.hyperparameter_service import load_best_params
 from app.services.data_refresh_service import ensure_fresh_data
+from app.services.scheduled_data_updater import start_scheduled_updates
 
 # Setup logger
 logger = logging.getLogger(__name__)
+
+
+# Start scheduled data updater on app startup
+@st.cache_resource
+def initialize_scheduled_updater():
+    """Initialize and start the scheduled data updater (runs once per app session)."""
+    try:
+        updater = start_scheduled_updates()
+        logger.info("✓ Scheduled data updater initialized")
+        return updater
+    except Exception as e:
+        logger.error(f"Failed to start scheduled updater: {e}")
+        return None
+
+
+# Initialize the updater
+_ = initialize_scheduled_updater()
 
 
 # Page configuration
@@ -47,46 +65,49 @@ def get_model_hyperparameters_ui(model_type: str, market_type: str) -> Dict:
     # Check for tuned parameters
     tuned_params = load_best_params(market_type=market_type, model_type=model_type)
     
-    # Button to load tuned parameters into sliders
-    if tuned_params:
-        col_btn1, col_btn2 = st.columns([1, 2])
-        with col_btn1:
-            if st.button("📥 Load Tuned Parameters", help="Populate sliders with optimized values from hyperparameter search"):
-                st.session_state[f"{model_type}_use_tuned"] = True
-                st.rerun()
-        with col_btn2:
-            if st.button("🔄 Reset to Defaults", help="Reset sliders to default values"):
-                st.session_state[f"{model_type}_use_tuned"] = False
-                st.rerun()
+    # Always show buttons for loading tuned parameters and resetting
+    col_btn1, col_btn2 = st.columns([1, 2])
+    with col_btn1:
+        if st.button(
+            "📥 Load Tuned Parameters", 
+            help="Populate sliders with optimized values from hyperparameter search" if tuned_params else "No tuned parameters available for this market/model combination",
+            disabled=not tuned_params
+        ):
+            st.session_state[f"{model_type}_use_tuned"] = True
+            st.rerun()
+    with col_btn2:
+        if st.button("🔄 Reset to Defaults", help="Reset sliders to default values"):
+            st.session_state[f"{model_type}_use_tuned"] = False
+            st.rerun()
 
     # Check if we should use tuned values
     use_tuned = st.session_state.get(f"{model_type}_use_tuned", False)
 
     if model_type == "persistence":
         st.markdown("**Persistence Model Settings**")
+        
+        # Get default or tuned values
+        default_window_length = tuned_params.get("window_length", 4) if use_tuned and tuned_params else 4
+        
         hyperparams["window_length"] = st.slider(
             "Lookback window (intervals)",
             min_value=1,
             max_value=96,  # 24 hours at 15-min resolution
-            value=4,  # 1 hour default
+            value=int(default_window_length),
             help="Number of recent intervals to use for persistence forecast",
         )
 
     elif model_type == "linear_regression":
         st.markdown("**Linear Regression Settings**")
-        col1, col2 = st.columns(2)
-        with col1:
-            hyperparams["fit_intercept"] = st.checkbox(
-                "Fit intercept",
-                value=True,
-                help="Whether to calculate the intercept for this model",
-            )
-        with col2:
-            hyperparams["normalize"] = st.checkbox(
-                "Normalize features",
-                value=False,
-                help="Normalize features before fitting (deprecated in newer sklearn)",
-            )
+        
+        # Get default or tuned values
+        default_fit_intercept = tuned_params.get("fit_intercept", True) if use_tuned and tuned_params else True
+        
+        hyperparams["fit_intercept"] = st.checkbox(
+            "Fit intercept",
+            value=default_fit_intercept,
+            help="Whether to calculate the intercept for this model",
+        )
 
     elif model_type == "random_forest":
         st.markdown("**Random Forest Settings**")
@@ -271,6 +292,58 @@ def get_model_hyperparameters_ui(model_type: str, market_type: str) -> Dict:
     return hyperparams
 
 
+def render_header_and_data_status():
+    """Render the application header and current data status at the top of the page."""
+    st.title("⚡ Energy Market Forecasting - Netherlands")
+    
+    st.markdown(
+        """
+        ### 👋 Welcome to Energy Market Forecasting
+        
+        **Get Started:**
+        1. **Select your market**: Choose from Day-Ahead or Imbalance markets (shortage/surplus prices, regulation state)
+        2. **Pick a model**: Try Persistence, Linear Regression, Random Forest, Histogram Gradient Boosting, or XGBoost Classifier (for regulation state)
+        3. **Configure settings**: Adjust hyperparameters and training data sources
+        4. **Set your horizon**: Forecast 1-24 hours ahead
+        5. **Click "Run Forecast"**: Generate and visualize predictions
+        """
+    )
+    
+    # Data Sources
+    with st.expander("📡 **Data Sources** - Click to expand", expanded=False):
+        st.markdown(
+            """
+            This application uses live data from:
+            - **ENTSO-E Transparency Platform**: Day-ahead electricity prices
+            - **TenneT Developer API**: Real-time imbalance settlement prices (shortage, surplus, regulation state)
+            - **Meteosource Weather API**: Temperature, wind speed, solar radiation, cloud cover, and precipitation forecasts
+            - **KNMI Historical Weather**: Historical meteorological data for the Netherlands
+            - **Automatic updates**: Data refreshes automatically to stay current
+            """
+        )
+    
+    # Data summary
+    with st.expander("📊 **Current Data Status** - Click to expand", expanded=False):
+        summary = get_data_summary()
+
+        if any(info["records"] > 0 for info in summary["markets"].values()):
+            for mkt_type, info in summary["markets"].items():
+                if info["records"] > 0:
+                    st.write(
+                        f"**{MARKET_TYPES[mkt_type]['display_name']}:** "
+                        f"{info['records']:,} records "
+                        f"({info['start_date'][:10]} to {info['end_date'][:10]})"
+                    )
+
+            if summary["weather"]["records"] > 0:
+                st.write(
+                    f"**Weather Data:** {summary['weather']['records']:,} records "
+                    f"({summary['weather']['start_date'][:10]} to {summary['weather']['end_date'][:10]})"
+                )
+    
+    st.markdown("---")
+
+
 def get_forecast_configuration() -> Optional[Dict]:
     """
     Render the top-aligned forecast configuration panel and collect user inputs.
@@ -278,9 +351,8 @@ def get_forecast_configuration() -> Optional[Dict]:
     Returns:
         Dictionary containing all configuration parameters, or None if "Run Forecast" not clicked
     """
-    st.title("⚡ Energy Market Forecasting - Netherlands")
-
-    st.markdown("---")
+    # Render header and data status first
+    render_header_and_data_status()
 
     # Configuration container
     with st.container():
@@ -432,14 +504,6 @@ def get_forecast_configuration() -> Optional[Dict]:
 
         st.markdown("---")
 
-        # === Advanced Options ===
-        with st.expander("🔧 Advanced Options"):
-            compare_models = st.checkbox(
-                "Compare all models",
-                value=False,
-                help="Generate forecasts from all three models for comparison",
-            )
-
         # === Action Buttons ===
         st.markdown("")  # Spacing
         col1, col2, col3 = st.columns([2, 1, 2])
@@ -476,7 +540,6 @@ def get_forecast_configuration() -> Optional[Dict]:
             "show_training_data": show_training_data,
             "show_weather_overlay": show_weather_overlay,
             "show_feature_importance": show_feature_importance,
-            "compare_models": compare_models,
         }
 
     return None
@@ -515,29 +578,19 @@ def generate_forecast_with_config(
         use_precipitation=config["training_data_options"]["use_precipitation"],
     )
 
-    # Generate forecast(s)
-    if config["compare_models"]:
-        model_types_to_compare = list(MODEL_TYPES.keys())
-        df_forecast = service.compare_models(
-            market_type=config["market_type"],
-            model_types=model_types_to_compare,
-            horizon_hours=config["forecast_horizon_hours"],
-            historical_window_hours=config["historical_window_hours"],
-            training_config=training_config,
-        )
-    else:
-        df_forecast = service.generate_forecast(
-            market_type=config["market_type"],
-            model_type=config["model_type"],
-            horizon_hours=config["forecast_horizon_hours"],
-            historical_window_hours=config["historical_window_hours"],
-            training_config=training_config,
-            hyperparameters=config["hyperparameters"],
-        )
+    # Generate forecast
+    df_forecast = service.generate_forecast(
+        market_type=config["market_type"],
+        model_type=config["model_type"],
+        horizon_hours=config["forecast_horizon_hours"],
+        historical_window_hours=config["historical_window_hours"],
+        training_config=training_config,
+        hyperparameters=config["hyperparameters"],
+    )
 
     # Get training data if requested
     training_df = None
-    if config["show_training_data"] and not config["compare_models"]:
+    if config["show_training_data"]:
         training_df = service.get_training_data(
             market_type=config["market_type"],
             model_type=config["model_type"],
@@ -1382,47 +1435,9 @@ def render_results_section(
 
 
 def render_welcome_screen():
-    """Render the welcome screen when no forecast has been run."""
+    """Render a simple message when no forecast has been run."""
     st.markdown("---")
-    st.header("👋 Welcome to Energy Market Forecasting")
-
-    st.markdown(
-        """
-        ### Get Started
-        
-        1. **Select your market**: Choose from Day-Ahead or Imbalance markets (shortage/surplus prices, regulation state)
-        2. **Pick a model**: Try Persistence, Linear Regression, Random Forest, Histogram Gradient Boosting, or XGBoost Classifier (for regulation state)
-        3. **Configure settings**: Adjust hyperparameters and training data sources
-        4. **Set your horizon**: Forecast 1-36 hours ahead
-        5. **Click "Run Forecast"**: Generate and visualize predictions
-        
-        ### Data Sources
-        
-        This application uses live data from:
-        - **ENTSO-E Transparency Platform**: Day-ahead prices and imbalance data
-        - **KNMI Weather API**: Temperature, wind, radiation, and precipitation
-        - **Automatic updates**: Data refreshes automatically to stay current
-        """
-    )
-
-    # Data summary
-    st.subheader("📊 Current Data Status")
-    summary = get_data_summary()
-
-    if any(info["records"] > 0 for info in summary["markets"].values()):
-        for mkt_type, info in summary["markets"].items():
-            if info["records"] > 0:
-                st.write(
-                    f"**{MARKET_TYPES[mkt_type]['display_name']}:** "
-                    f"{info['records']:,} records "
-                    f"({info['start_date'][:10]} to {info['end_date'][:10]})"
-                )
-
-        if summary["weather"]["records"] > 0:
-            st.write(
-                f"**Weather Data:** {summary['weather']['records']:,} records "
-                f"({summary['weather']['start_date'][:10]} to {summary['weather']['end_date'][:10]})"
-            )
+    st.info("👆 Configure your forecast settings above and click **'Run Forecast'** to generate predictions.")
 
 
 # ============================================================================

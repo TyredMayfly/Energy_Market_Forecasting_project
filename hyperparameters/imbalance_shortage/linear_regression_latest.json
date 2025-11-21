@@ -1,0 +1,19 @@
+{
+  "best_params": {
+    "fit_intercept": true
+  },
+  "best_score": -34580.731254938735,
+  "metadata": {
+    "model_type": "linear_regression",
+    "market_type": "imbalance_shortage",
+    "search_timestamp": "2025-11-20T11:37:00.192096",
+    "metric": "neg_mean_squared_error",
+    "test_score": 0.04369414796424487,
+    "test_rmse": 179.79323707999202,
+    "n_samples_train": 30297,
+    "n_samples_test": 7575,
+    "n_features": 18,
+    "n_iter": 100,
+    "cv_splits": 5
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "best_params": {
+    "l2_regularization": 1.0,
+    "learning_rate": 0.03,
+    "max_depth": 3,
+    "max_iter": 300,
+    "max_leaf_nodes": 31,
+    "min_samples_leaf": 100
+  },
+  "best_score": -34072.92663557459,
+  "metadata": {
+    "model_type": "hist_gradient_boosting",
+    "market_type": "imbalance_shortage",
+    "search_timestamp": "2025-11-20T12:02:12.191019",
+    "metric": "neg_mean_squared_error",
+    "test_score": 0.05345110277019571,
+    "test_rmse": 178.87369237365513,
+    "n_samples_train": 30297,
+    "n_samples_test": 7575,
+    "n_features": 18,
+    "n_iter": 100,
+    "cv_splits": 5
+  }
+}

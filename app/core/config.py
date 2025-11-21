@@ -37,7 +37,9 @@ class Settings(BaseSettings):
     meteosource_location: str = "amsterdam"  # Default location
 
     # TenneT Settlement Prices Configuration
-    tennet_settlement_base_url: str = "https://api.tennet.eu/settlement-prices/v1"
+    # Note: Using production environment (api.tennet.eu) with 25 requests/day limit
+    # Acceptance environment (api.acc.tennet.eu) has 300/day but may require different API key
+    tennet_settlement_base_url: str = "https://api.tennet.eu"
     tennet_api_timeout: int = 10  # seconds
 
     # Application Settings

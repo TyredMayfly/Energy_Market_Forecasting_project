@@ -1,0 +1,19 @@
+{
+  "best_params": {
+    "fit_intercept": true
+  },
+  "best_score": -1894.666764231271,
+  "metadata": {
+    "model_type": "linear_regression",
+    "market_type": "day_ahead",
+    "search_timestamp": "2025-11-20T11:27:05.547567",
+    "metric": "neg_mean_squared_error",
+    "test_score": 0.5559823326778471,
+    "test_rmse": 22.674802603330242,
+    "n_samples_train": 10644,
+    "n_samples_test": 2662,
+    "n_features": 18,
+    "n_iter": 100,
+    "cv_splits": 5
+  }
+}

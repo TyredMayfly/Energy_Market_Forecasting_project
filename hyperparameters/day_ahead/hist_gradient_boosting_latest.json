@@ -1,0 +1,23 @@
+{
+  "best_params": {
+    "l2_regularization": 0.0,
+    "learning_rate": 0.05,
+    "max_iter": 500,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20
+  },
+  "best_score": -972.9807447080681,
+  "metadata": {
+    "model_type": "hist_gradient_boosting",
+    "market_type": "day_ahead",
+    "search_timestamp": "2025-11-20T11:36:59.760080",
+    "metric": "neg_mean_squared_error",
+    "test_score": 0.6510469558693439,
+    "test_rmse": 20.101426819492982,
+    "n_samples_train": 10644,
+    "n_samples_test": 2662,
+    "n_features": 18,
+    "n_iter": 100,
+    "cv_splits": 5
+  }
+}
