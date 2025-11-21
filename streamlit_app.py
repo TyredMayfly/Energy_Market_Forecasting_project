@@ -605,18 +605,11 @@ def generate_forecast_with_config(
     # Get metadata (model info, RMSE, etc.)
     metadata = {}
     if df_forecast is not None:
-        if config["compare_models"]:
-            metadata["models"] = {}
-            for mtype in df_forecast["model_type"].unique():
-                model_info = service.get_model_info(config["market_type"], mtype, training_config)
-                if model_info:
-                    metadata["models"][mtype] = model_info
-        else:
-            model_info = service.get_model_info(
-                config["market_type"], config["model_type"], training_config
-            )
-            if model_info:
-                metadata["model_info"] = model_info
+        model_info = service.get_model_info(
+            config["market_type"], config["model_type"], training_config
+        )
+        if model_info:
+            metadata["model_info"] = model_info
 
         # Calculate evaluation metrics (RMSE for regression, classification metrics for regulation_state)
         target_type = MARKET_TYPES[config["market_type"]].get("target_type", "regression")
@@ -783,24 +776,9 @@ def plot_forecast_results(
             f"Price range: {forecast_df_display['forecast_price_eur_per_mwh'].min():.2f}-{forecast_df_display['forecast_price_eur_per_mwh'].max():.2f} EUR/MWh"
         )
 
-    if config["compare_models"]:
-        colors = {"persistence": "blue", "linear_regression": "green", "random_forest": "red"}
-
-        for mtype in forecast_df_display["model_type"].unique():
-            df_model = forecast_df_display[forecast_df_display["model_type"] == mtype]
-            
-            if is_classification:
-                # Use bar chart for classification
-                fig.add_trace(
-                    go.Bar(
-                        x=df_model["timestamp_utc"],
-                        y=df_model["forecast_price_eur_per_mwh"],
-                        name=MODEL_TYPES[mtype]["display_name"],
-                        marker=dict(color=colors.get(mtype, "orange")),
-                        opacity=0.7,
-                    )
-                )
-            else:
+    if False:  # Compare models removed
+        pass
+    else:
                 # Use line+markers for regression
                 fig.add_trace(
                     go.Scatter(
@@ -1057,10 +1035,7 @@ def render_results_section(
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown(f"**Market:** {MARKET_TYPES[config['market_type']]['display_name']}")
-            if config["compare_models"]:
-                st.markdown(f"**Models:** All 3 models")
-            else:
-                st.markdown(f"**Model:** {MODEL_TYPES[config['model_type']]['display_name']}")
+            st.markdown(f"**Model:** {MODEL_TYPES[config['model_type']]['display_name']}")
         with col2:
             st.markdown(f"**Horizon:** {config['forecast_horizon_hours']} hours")
             st.markdown(f"**Resolution:** 15-minute intervals")
@@ -1195,24 +1170,8 @@ def render_results_section(
         )
 
     with tab2:
-        if config["compare_models"]:
-            for mtype, model_info in metadata.get("models", {}).items():
-                with st.expander(f"{MODEL_TYPES[mtype]['display_name']}", expanded=False):
-                    st.write(f"**Trained at:** {model_info['trained_at']}")
-                    st.write(f"**Training samples:** {model_info['n_samples']}")
-                    st.write(f"**Features used:** {len(model_info['feature_columns'])}")
-
-                    # Show model-specific information
-                    if mtype == "random_forest" and "feature_importance" in model_info:
-                        st.markdown("**Top 10 Most Important Features:**")
-                        importance_data = model_info["feature_importance"]
-                        import_df = pd.DataFrame(
-                            {
-                                "Feature": importance_data["features"][:10],
-                                "Importance": importance_data["importance"][:10],
-                            }
-                        )
-                        st.dataframe(import_df, hide_index=True)
+        if False:  # Compare models removed
+            pass
                     elif mtype == "linear_regression" and "coefficients" in model_info:
                         st.markdown("**Model Coefficients:**")
                         st.write(f"Intercept: {model_info['intercept']:.4f}")
@@ -1323,11 +1282,7 @@ def render_results_section(
     with tab3:
         # This tab now shows additional feature importance details
         if config["model_type"] == "random_forest":
-            model_info = (
-                metadata.get("model_info")
-                if not config["compare_models"]
-                else metadata.get("models", {}).get("random_forest")
-            )
+            model_info = metadata.get("model_info")
 
             if model_info and "feature_importance" in model_info:
                 st.markdown("### Feature Importance Analysis")
@@ -1372,11 +1327,7 @@ def render_results_section(
                 )
 
         elif config["model_type"] == "linear_regression":
-            model_info = (
-                metadata.get("model_info")
-                if not config["compare_models"]
-                else metadata.get("models", {}).get("linear_regression")
-            )
+            model_info = metadata.get("model_info")
 
             if model_info and "coefficients" in model_info:
                 st.markdown("### Coefficient Analysis")
