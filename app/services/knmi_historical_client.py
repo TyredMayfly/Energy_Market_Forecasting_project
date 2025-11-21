@@ -34,6 +34,33 @@ class KNMIHistoricalClient:
     # VICL = VV:N:U (Visibility, cloud cover, humidity)
     # ALL = all variables
 
+    # Cumulative vs Instantaneous field mapping
+    # KNMI hourly data has cumulative measurements over the PREVIOUS hour
+    # Timestamp HH:00 represents cumulative total from (HH-1):00 to HH:00
+    # These must be time-shifted backward by 30 minutes to place value at interval center
+    CUMULATIVE_KNMI_FIELDS = {
+        "Q",  # Global radiation (J/cm² over previous hour)
+        "RH",  # Precipitation duration (0.1 hour over previous hour)
+        "DR",  # Precipitation amount (0.1 mm over previous hour)
+        "SQ",  # Sunshine duration (0.1 hour over previous hour)
+        "EV24",  # Potential evapotranspiration (0.1 mm over previous 24h)
+    }
+
+    # Instantaneous/averaged fields (measured AT the timestamp, not cumulative)
+    # These do NOT need time-shift
+    INSTANTANEOUS_KNMI_FIELDS = {
+        "T",  # Temperature (0.1 °C) - instantaneous
+        "TD",  # Dew point (0.1 °C) - instantaneous
+        "DD",  # Wind direction (degrees) - averaged over previous hour
+        "FH",  # Wind speed (0.1 m/s) - averaged over previous hour
+        "FF",  # Wind speed 10-min (0.1 m/s) - averaged
+        "FX",  # Wind gust (0.1 m/s) - max over previous hour
+        "N",  # Cloud cover (oktas) - instantaneous
+        "U",  # Relative humidity (%) - instantaneous
+        "P",  # Air pressure (0.1 hPa) - instantaneous
+        "VV",  # Visibility (0-50=km, 51-80=5-30km coded, >89=<100m) - instantaneous
+    }
+
     def __init__(self, station: str = DEFAULT_STATION):
         """
         Initialize KNMI Historical Client.
@@ -164,58 +191,124 @@ class KNMIHistoricalClient:
         Convert KNMI data to standard format matching Meteosource.
 
         KNMI variables (subset matching Meteosource free tier):
-        - T: Temperature (0.1 °C)
-        - FH: Hourly mean wind speed (0.1 m/s)
-        - Q: Global radiation (J/cm²/h)
-        - N: Cloud cover (oktas, 0-8, 9=invisible)
-        - RH: Precipitation (0.1 mm)
+        - T: Temperature (0.1 °C) - instantaneous
+        - FH: Hourly mean wind speed (0.1 m/s) - averaged over previous hour
+        - Q: Global radiation (J/cm²/h) - cumulative over previous hour
+        - N: Cloud cover (oktas, 0-8, 9=invisible) - instantaneous
+        - RH: Precipitation (0.1 mm) - cumulative over previous hour
+
+        IMPORTANT: Cumulative measurements (Q, RH) are time-shifted backward by 30 minutes
+        to place the value at the center of the measurement interval, then interpolated
+        to create smooth hourly series.
 
         Args:
             df: Raw KNMI DataFrame
 
         Returns:
-            DataFrame with standardized columns
+            DataFrame with standardized columns and corrected timestamps
         """
-        result = pd.DataFrame()
-        result["timestamp"] = df["timestamp"]
+        # Create separate DataFrames for cumulative and instantaneous fields
+        df_instantaneous = pd.DataFrame()
+        df_cumulative = pd.DataFrame()
 
-        # Temperature: 0.1 °C → °C
+        # Set timestamp as index for both
+        df_instantaneous["timestamp"] = df["timestamp"]
+        df_cumulative["timestamp"] = df["timestamp"]
+
+        # === INSTANTANEOUS FIELDS (no time-shift needed) ===
+
+        # Temperature: 0.1 °C → °C (instantaneous)
         if "T" in df.columns:
-            result["temperature_deg_c"] = pd.to_numeric(df["T"], errors="coerce") / 10.0
+            df_instantaneous["temperature_deg_c"] = pd.to_numeric(df["T"], errors="coerce") / 10.0
 
-        # Wind speed: 0.1 m/s → m/s
+        # Wind speed: 0.1 m/s → m/s (averaged over previous hour, but treated as instantaneous)
         if "FH" in df.columns:
-            result["wind_speed_m_per_s"] = pd.to_numeric(df["FH"], errors="coerce") / 10.0
+            df_instantaneous["wind_speed_m_per_s"] = pd.to_numeric(df["FH"], errors="coerce") / 10.0
 
-        # Global radiation: J/cm²/h → W/m²
-        # 1 J/cm²/h = 10000 J/m²/h = 10000/3600 W/m² ≈ 2.78 W/m²
-        if "Q" in df.columns:
-            result["global_radiation_w_per_m2"] = (
-                pd.to_numeric(df["Q"], errors="coerce") * 10000 / 3600
-            )
-
-        # Cloud cover: oktas (0-8) → percentage
+        # Cloud cover: oktas (0-8) → percentage (instantaneous)
         # 0 oktas = 0%, 1 okta = 12.5%, ..., 8 oktas = 100%
         if "N" in df.columns:
             # Convert to numeric, coercing errors to NaN
             cloud_oktas = pd.to_numeric(df["N"], errors="coerce")
             cloud_oktas = cloud_oktas.replace(9, float("nan"))  # 9 = sky invisible
-            result["cloud_cover_pct"] = (cloud_oktas / 8.0 * 100).round(0)
+            df_instantaneous["cloud_cover_pct"] = (cloud_oktas / 8.0 * 100).round(0)
 
-        # Precipitation: 0.1 mm → mm
+        # === CUMULATIVE FIELDS (require time-shift + interpolation) ===
+
+        # Global radiation: J/cm²/h → W/m² (cumulative over previous hour)
+        # 1 J/cm²/h = 10000 J/m²/h = 10000/3600 W/m² ≈ 2.78 W/m²
+        # Convert cumulative J to average W by dividing by 3600 seconds
+        if "Q" in df.columns:
+            df_cumulative["global_radiation_w_per_m2"] = (
+                pd.to_numeric(df["Q"], errors="coerce") * 10000 / 3600
+            )
+
+        # Precipitation: 0.1 mm → mm (cumulative over previous hour)
         if "RH" in df.columns:
             # Convert to numeric, coercing errors to NaN
             precip = pd.to_numeric(df["RH"], errors="coerce")
             precip = precip.replace(-1, 0)  # -1 means <0.05 mm
-            result["precipitation_mm"] = precip / 10.0
+            df_cumulative["precipitation_mm"] = precip / 10.0
+
+        # === TIME-SHIFT CORRECTION FOR CUMULATIVE FIELDS ===
+        # KNMI timestamps represent END of measurement interval
+        # Shift backward by 30 minutes to place value at interval center
+        if not df_cumulative.empty and len(df_cumulative.columns) > 1:  # More than just timestamp
+            df_cumulative = df_cumulative.set_index("timestamp")
+            # Shift index backward by 30 minutes
+            df_cumulative.index = df_cumulative.index - pd.Timedelta(minutes=30)
+            logger.info(f"Applied 30-minute time-shift to {len(df_cumulative.columns)} cumulative fields")
+
+            # Interpolate to create smooth hourly series
+            # Strategy: Create hourly range, reindex to include both shifted and hourly points, then interpolate
+            # This preserves the shifted values while creating hourly grid points
+            start_hour = df_cumulative.index.min().floor("1h")
+            end_hour = df_cumulative.index.max().ceil("1h")
+            hourly_index = pd.date_range(start=start_hour, end=end_hour, freq="1h")
+            
+            # Reindex to include both original shifted times and hourly grid
+            combined_index = df_cumulative.index.union(hourly_index).sort_values()
+            df_cumulative = df_cumulative.reindex(combined_index)
+            
+            # Interpolate linearly between points
+            df_cumulative = df_cumulative.interpolate(method="linear", limit_direction="both")
+            
+            # Keep only the hourly grid points
+            df_cumulative = df_cumulative.reindex(hourly_index)
+            
+            logger.info(f"Interpolated cumulative fields to hourly resolution: {len(df_cumulative)} records")
+        else:
+            # No cumulative fields present
+            df_cumulative = df_cumulative.set_index("timestamp") if "timestamp" in df_cumulative.columns else pd.DataFrame()
+
+        # === MERGE INSTANTANEOUS AND CUMULATIVE FIELDS ===
+        # Check if we have actual data (more than just timestamp column)
+        has_instantaneous = not df_instantaneous.empty and len(df_instantaneous.columns) > 1
+        has_cumulative = not df_cumulative.empty and isinstance(df_cumulative.index, pd.DatetimeIndex)
+
+        if has_instantaneous:
+            df_instantaneous = df_instantaneous.set_index("timestamp")
+
+        # Combine both DataFrames
+        if has_cumulative and has_instantaneous:
+            # Merge on index (timestamp)
+            result = df_instantaneous.join(df_cumulative, how="outer")
+            # Forward-fill and back-fill to ensure complete coverage
+            result = result.ffill().bfill()
+        elif has_instantaneous:
+            result = df_instantaneous
+        elif has_cumulative:
+            result = df_cumulative
+        else:
+            result = pd.DataFrame()
 
         # Add metadata
-        result["data_type"] = "historical"
-        result["fetch_timestamp"] = datetime.now()
-
-        result.set_index("timestamp", inplace=True)
+        if not result.empty:
+            result["data_type"] = "historical"
+            result["fetch_timestamp"] = datetime.now()
 
         logger.info(f"✓ Converted {len(result)} records to standard format")
+        logger.info(f"  Columns: {', '.join(result.columns)}")
         return result
 
     def fetch_historical_for_2025(self, end_date: Optional[datetime] = None) -> pd.DataFrame:

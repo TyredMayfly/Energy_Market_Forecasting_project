@@ -16,6 +16,7 @@ from app.core.config import MARKET_TYPES, MODEL_TYPES, settings
 from app.services.data_store import get_data_summary, load_market_data, load_weather_data
 from app.services.forecast_service import get_forecast_service, TrainingDataConfig
 from app.services.hyperparameter_service import load_best_params
+from app.services.data_refresh_service import ensure_fresh_data
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -493,6 +494,15 @@ def generate_forecast_with_config(
     Returns:
         Tuple of (historical_df, training_df, forecast_df, metadata)
     """
+    # Ensure fresh data before forecasting
+    try:
+        with st.spinner("🔄 Checking data freshness..."):
+            ensure_fresh_data(freshness_threshold_minutes=60)
+            st.success("✓ Data is up to date", icon="✅")
+    except Exception as e:
+        logger.warning(f"Data refresh failed: {e}")
+        st.warning(f"⚠ Data refresh failed, using existing data: {e}")
+
     service = get_forecast_service()
 
     # Create training configuration
@@ -555,12 +565,23 @@ def generate_forecast_with_config(
             if model_info:
                 metadata["model_info"] = model_info
 
-        # Calculate RMSE
-        rmse_result = service.calculate_forecast_rmse(df_forecast, config["market_type"])
-        if rmse_result is not None:
-            rmse, n_points = rmse_result
-            metadata["rmse"] = rmse
-            metadata["rmse_points"] = n_points
+        # Calculate evaluation metrics (RMSE for regression, classification metrics for regulation_state)
+        target_type = MARKET_TYPES[config["market_type"]].get("target_type", "regression")
+        
+        if target_type == "classification":
+            # Use classification metrics for regulation_state
+            classification_result = service.evaluate_classification_forecast(
+                df_forecast, config["market_type"]
+            )
+            if classification_result is not None:
+                metadata["classification_metrics"] = classification_result
+        else:
+            # Use RMSE for price forecasts
+            rmse_result = service.calculate_forecast_rmse(df_forecast, config["market_type"])
+            if rmse_result is not None:
+                rmse, n_points = rmse_result
+                metadata["rmse"] = rmse
+                metadata["rmse_points"] = n_points
 
     return historical_df, training_df, df_forecast, metadata
 
@@ -714,27 +735,66 @@ def plot_forecast_results(
 
         for mtype in forecast_df_display["model_type"].unique():
             df_model = forecast_df_display[forecast_df_display["model_type"] == mtype]
+            
+            if is_classification:
+                # Use bar chart for classification
+                fig.add_trace(
+                    go.Bar(
+                        x=df_model["timestamp_utc"],
+                        y=df_model["forecast_price_eur_per_mwh"],
+                        name=MODEL_TYPES[mtype]["display_name"],
+                        marker=dict(color=colors.get(mtype, "orange")),
+                        opacity=0.7,
+                    )
+                )
+            else:
+                # Use line+markers for regression
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_model["timestamp_utc"],
+                        y=df_model["forecast_price_eur_per_mwh"],
+                        mode="lines+markers",
+                        name=MODEL_TYPES[mtype]["display_name"],
+                        line=dict(color=colors.get(mtype, "orange"), width=3),
+                        marker=dict(size=6),
+                    )
+                )
+    else:
+        if is_classification:
+            # Use bar chart for classification
+            # Define color mapping for regulation states
+            state_colors = {
+                -1: "#E74C3C",  # Red for deficit
+                0: "#95A5A6",   # Gray for balanced
+                1: "#3498DB",   # Blue for surplus (light)
+                2: "#2ECC71",   # Green for surplus (strong)
+            }
+            # Map each bar to appropriate color based on state
+            bar_colors = [
+                state_colors.get(int(val), "#34495E") 
+                for val in forecast_df_display["forecast_price_eur_per_mwh"]
+            ]
+            
             fig.add_trace(
-                go.Scatter(
-                    x=df_model["timestamp_utc"],
-                    y=df_model["forecast_price_eur_per_mwh"],
-                    mode="lines+markers",
-                    name=MODEL_TYPES[mtype]["display_name"],
-                    line=dict(color=colors.get(mtype, "orange"), width=3),
-                    marker=dict(size=6),
+                go.Bar(
+                    x=forecast_df_display["timestamp_utc"],
+                    y=forecast_df_display["forecast_price_eur_per_mwh"],
+                    name=f"{MODEL_TYPES[config['model_type']]['display_name']} Forecast",
+                    marker=dict(color=bar_colors),
                 )
             )
-    else:
-        fig.add_trace(
-            go.Scatter(
-                x=forecast_df_display["timestamp_utc"],
-                y=forecast_df_display["forecast_price_eur_per_mwh"],
-                mode="lines+markers",
-                name=f"{MODEL_TYPES[config['model_type']]['display_name']} Forecast",
-                line=dict(color="blue", width=3),
-                marker=dict(size=8),
+        else:
+            # Use line+markers for regression
+            fig.add_trace(
+                go.Scatter(
+                    x=forecast_df_display["timestamp_utc"],
+                    y=forecast_df_display["forecast_price_eur_per_mwh"],
+                    mode="lines+markers",
+                    name=f"{MODEL_TYPES[config['model_type']]['display_name']} Forecast",
+                    line=dict(color="blue", width=3),
+                    marker=dict(size=8),
+                )
             )
-        )
 
     # === Layout ===
     y_axis_title = "Price (EUR/MWh)" if not is_classification else "Regulation State"
@@ -968,32 +1028,99 @@ def render_results_section(
 
     # === Forecast Statistics ===
     st.subheader("📊 Forecast Statistics")
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        mean_price = forecast_df["forecast_price_eur_per_mwh"].mean()
-        st.metric("Mean Price", f"{mean_price:.2f}", help="EUR/MWh")
-
-    with col2:
-        min_price = forecast_df["forecast_price_eur_per_mwh"].min()
-        st.metric("Min Price", f"{min_price:.2f}", help="EUR/MWh")
-
-    with col3:
-        max_price = forecast_df["forecast_price_eur_per_mwh"].max()
-        st.metric("Max Price", f"{max_price:.2f}", help="EUR/MWh")
-
-    with col4:
-        if "rmse" in metadata and "rmse_points" in metadata:
-            rmse = metadata["rmse"]
-            n_points = metadata["rmse_points"]
-            hours_covered = n_points / 4
-            st.metric(
-                "RMSE",
-                f"{rmse:.2f}",
-                help=f"Root Mean Squared Error (EUR/MWh) on {n_points} points ({hours_covered:.1f}h)",
+    
+    target_type = MARKET_TYPES[config["market_type"]].get("target_type", "regression")
+    is_classification = target_type == "classification"
+    
+    if is_classification:
+        # Show classification metrics for regulation state
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            # Most common prediction
+            mode_value = forecast_df["forecast_price_eur_per_mwh"].mode()[0]
+            class_labels = MARKET_TYPES[config["market_type"]].get("class_labels", {})
+            mode_label = class_labels.get(int(mode_value), str(int(mode_value)))
+            st.metric("Most Common", mode_label, help="Most predicted regulation state")
+        
+        with col2:
+            # Count of predictions
+            n_predictions = len(forecast_df)
+            st.metric("Predictions", n_predictions, help="Number of forecast points")
+        
+        with col3:
+            # Accuracy (if classification metrics available)
+            if "classification_metrics" in metadata:
+                accuracy = metadata["classification_metrics"]["accuracy"]
+                st.metric(
+                    "Accuracy",
+                    f"{accuracy:.1%}",
+                    help=f"Classification accuracy on {metadata['classification_metrics']['n_points']} overlapping points",
+                )
+            else:
+                st.metric("Accuracy", "N/A", help="No historical data for comparison")
+        
+        with col4:
+            # F1 Score (if classification metrics available)
+            if "classification_metrics" in metadata:
+                f1_macro = metadata["classification_metrics"]["f1_macro"]
+                st.metric(
+                    "F1-Macro",
+                    f"{f1_macro:.3f}",
+                    help="Macro-averaged F1 score across all regulation states",
+                )
+            else:
+                st.metric("F1-Macro", "N/A", help="No historical data for comparison")
+        
+        # Show confusion matrix if available
+        if "classification_metrics" in metadata:
+            st.subheader("🔍 Confusion Matrix")
+            conf_matrix = metadata["classification_metrics"]["confusion_matrix"]
+            
+            # Convert to DataFrame for better display
+            import numpy as np
+            conf_matrix_array = np.array(conf_matrix)
+            
+            # Get unique states from the confusion matrix
+            n_states = conf_matrix_array.shape[0]
+            states = list(range(-1, -1 + n_states))  # Assumes states start at -1
+            state_labels = [class_labels.get(s, str(s)) for s in states]
+            
+            conf_df = pd.DataFrame(
+                conf_matrix_array,
+                index=[f"Actual: {label}" for label in state_labels],
+                columns=[f"Predicted: {label}" for label in state_labels],
             )
-        else:
-            st.metric("RMSE", "N/A", help="No historical data for comparison")
+            
+            st.dataframe(conf_df, use_container_width=True)
+    else:
+        # Show regression metrics for price forecasts
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            mean_price = forecast_df["forecast_price_eur_per_mwh"].mean()
+            st.metric("Mean Price", f"{mean_price:.2f}", help="EUR/MWh")
+
+        with col2:
+            min_price = forecast_df["forecast_price_eur_per_mwh"].min()
+            st.metric("Min Price", f"{min_price:.2f}", help="EUR/MWh")
+
+        with col3:
+            max_price = forecast_df["forecast_price_eur_per_mwh"].max()
+            st.metric("Max Price", f"{max_price:.2f}", help="EUR/MWh")
+
+        with col4:
+            if "rmse" in metadata and "rmse_points" in metadata:
+                rmse = metadata["rmse"]
+                n_points = metadata["rmse_points"]
+                hours_covered = n_points / 4
+                st.metric(
+                    "RMSE",
+                    f"{rmse:.2f}",
+                    help=f"Root Mean Squared Error (EUR/MWh) on {n_points} points ({hours_covered:.1f}h)",
+                )
+            else:
+                st.metric("RMSE", "N/A", help="No historical data for comparison")
 
     # === Tabs for Additional Info ===
     tab1, tab2, tab3 = st.tabs(["📋 Data Table", "ℹ️ Model Info", "📊 Feature Importance"])

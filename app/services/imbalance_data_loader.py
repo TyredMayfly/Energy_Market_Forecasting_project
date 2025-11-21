@@ -87,6 +87,36 @@ def load_and_combine_imbalance_csvs(source_dir: Path) -> pd.DataFrame:
     for price_col in ["shortage_price", "surplus_price"]:
         combined_df[price_col] = pd.to_numeric(combined_df[price_col], errors="coerce")
 
+    # Handle missing price values using forward-fill strategy
+    # This ensures temporal continuity by carrying forward last known prices
+    # Note: This is appropriate for 15-minute resolution imbalance data where
+    # prices don't change drastically between intervals
+    missing_shortage_before = combined_df["shortage_price"].isnull().sum()
+    missing_surplus_before = combined_df["surplus_price"].isnull().sum()
+
+    if missing_shortage_before > 0 or missing_surplus_before > 0:
+        logger.info(
+            f"Found {missing_shortage_before} missing shortage prices, "
+            f"{missing_surplus_before} missing surplus prices"
+        )
+        logger.info("Applying forward-fill imputation to handle missing values...")
+
+        # Forward-fill: use last known price to fill gaps
+        combined_df["shortage_price"] = combined_df["shortage_price"].ffill()
+        combined_df["surplus_price"] = combined_df["surplus_price"].ffill()
+
+        # Back-fill any remaining NaNs at the start of the dataset
+        combined_df["shortage_price"] = combined_df["shortage_price"].bfill()
+        combined_df["surplus_price"] = combined_df["surplus_price"].bfill()
+
+        missing_shortage_after = combined_df["shortage_price"].isnull().sum()
+        missing_surplus_after = combined_df["surplus_price"].isnull().sum()
+
+        logger.info(
+            f"After imputation: {missing_shortage_after} missing shortage, "
+            f"{missing_surplus_after} missing surplus"
+        )
+
     # Map regulation state to standard codes if needed
     # Expected values: 1 (UP), -1 (DOWN), 2 (UP_AND_DOWN), 0 (BALANCED)
     # Standardize text values to numeric

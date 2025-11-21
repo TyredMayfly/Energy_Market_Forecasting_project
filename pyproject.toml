@@ -71,6 +71,9 @@ addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=html",
 ]
 
 [tool.ruff]

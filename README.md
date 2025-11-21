@@ -217,23 +217,45 @@ All models include:
 ### Run Tests
 
 ```bash
-# Run all tests
+# Run all tests (includes coverage by default)
 pytest
 
-# Run with coverage
+# Run tests with detailed coverage report
+pytest --cov=app --cov-report=term-missing
+
+# Generate HTML coverage report
 pytest --cov=app --cov-report=html
+# Open htmlcov/index.html in your browser
 
 # Run specific test suite
 pytest tests/unit/
 pytest tests/integration/
+
+# Using Makefile (if available)
+make test              # Run all tests with coverage
+make test-cov          # Coverage report in terminal
+make test-cov-html     # Generate HTML coverage report
+make test-cov-all      # Generate all report formats
 ```
 
 ### Test Coverage
 
 - **205 tests** covering all functionality
+- **Coverage reports**: Terminal, HTML, and XML formats available
+- **Coverage threshold**: 70% minimum enforced in CI
 - **Unit tests**: Model training, feature engineering, data loading, configuration
 - **Integration tests**: End-to-end forecasting, weather feature selection, model comparison
 - **Test features**: 15-minute resolution, historical windows, RMSE calculation, weather toggles
+
+**View detailed coverage:**
+```bash
+# Terminal output with missing lines
+pytest --cov=app --cov-report=term-missing
+
+# HTML report with line-by-line highlighting
+pytest --cov=app --cov-report=html
+open htmlcov/index.html  # or start htmlcov/index.html on Windows
+```
 
 ## Configuration
 

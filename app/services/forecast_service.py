@@ -480,6 +480,67 @@ class ForecastService:
             logger.error(f"Error generating forecast: {e}")
             return None
 
+    def evaluate_classification_forecast(
+        self,
+        forecast_df: pd.DataFrame,
+        market_type: str,
+    ) -> Optional[dict]:
+        """
+        Calculate classification metrics for regulation state forecast.
+
+        Args:
+            forecast_df: DataFrame with forecast predictions
+            market_type: Type of market to get actual data for
+
+        Returns:
+            Dict with accuracy, f1_macro, confusion_matrix, n_points or None if no overlap
+        """
+        from app.services.data_store import load_market_data
+        from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
+        import numpy as np
+
+        # Load actual market data
+        df_actual = load_market_data(market_type)
+        if df_actual is None or df_actual.empty:
+            return None
+
+        target_column = MARKET_TYPES[market_type]["target_column"]
+
+        # Ensure timezone aware
+        if df_actual["timestamp_utc"].dt.tz is None:
+            df_actual["timestamp_utc"] = pd.to_datetime(df_actual["timestamp_utc"], utc=True)
+        if forecast_df["timestamp_utc"].dt.tz is None:
+            forecast_df["timestamp_utc"] = pd.to_datetime(forecast_df["timestamp_utc"], utc=True)
+
+        # Merge on timestamp to find overlapping data
+        merged = forecast_df.merge(
+            df_actual[["timestamp_utc", target_column]], on="timestamp_utc", how="inner"
+        )
+
+        if merged.empty:
+            return None
+
+        y_true = merged[target_column].values
+        y_pred = merged["forecast_price_eur_per_mwh"].values.astype(int)
+        n_points = len(merged)
+
+        # Calculate classification metrics
+        accuracy = accuracy_score(y_true, y_pred)
+        f1_macro = f1_score(y_true, y_pred, average="macro", zero_division=0)
+        conf_matrix = confusion_matrix(y_true, y_pred).tolist()
+
+        logger.info(
+            f"Classification metrics on {n_points} overlapping points: "
+            f"Accuracy={accuracy:.3f}, F1-Macro={f1_macro:.3f}"
+        )
+
+        return {
+            "accuracy": accuracy,
+            "f1_macro": f1_macro,
+            "confusion_matrix": conf_matrix,
+            "n_points": n_points,
+        }
+
     def calculate_forecast_rmse(
         self,
         forecast_df: pd.DataFrame,
@@ -487,6 +548,7 @@ class ForecastService:
     ) -> Optional[tuple[float, int]]:
         """
         Calculate RMSE for a forecast against actual historical data.
+        Only used for regression markets (price forecasts).
 
         Args:
             forecast_df: DataFrame with forecast predictions

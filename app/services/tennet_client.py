@@ -41,7 +41,9 @@ class TennetClient:
             timeout: Request timeout in seconds
         """
         self.base_url = base_url or settings.tennet_settlement_base_url
-        self.api_key = api_key or settings.tennet_api_key
+        # Handle api_key: use provided value if explicitly set (even if empty),
+        # otherwise fall back to settings
+        self.api_key = api_key if api_key is not None else settings.tennet_api_key
         self.timeout = timeout
 
         if not self.api_key:
@@ -61,7 +63,8 @@ class TennetClient:
             "Content-Type": "application/json",
         }
 
-        if self.api_key:
+        # Only add Authorization header if API key is present and non-empty
+        if self.api_key and self.api_key.strip():
             # TenneT uses API key in Authorization header with Bearer scheme
             headers["Authorization"] = f"Bearer {self.api_key}"
 

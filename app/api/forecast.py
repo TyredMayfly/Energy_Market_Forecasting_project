@@ -13,6 +13,7 @@ from app.core.config import MARKET_TYPES, MODEL_TYPES
 from app.core.logging import get_logger
 from app.services.data_store import get_data_summary
 from app.services.forecast_service import get_forecast_service
+from app.services.data_refresh_service import ensure_fresh_data
 
 logger = get_logger(__name__)
 
@@ -142,6 +143,12 @@ async def generate_forecast(request: ForecastRequest):
     Returns:
         Forecast results
     """
+    # Ensure fresh data before forecasting
+    try:
+        ensure_fresh_data(freshness_threshold_minutes=60)
+    except Exception as e:
+        logger.warning(f"Data refresh failed, proceeding with existing data: {e}")
+
     # Validate market type
     if request.market_type not in MARKET_TYPES:
         raise HTTPException(
@@ -215,6 +222,12 @@ async def compare_models(
     Returns:
         Combined forecasts from all models
     """
+    # Ensure fresh data before forecasting
+    try:
+        ensure_fresh_data(freshness_threshold_minutes=60)
+    except Exception as e:
+        logger.warning(f"Data refresh failed, proceeding with existing data: {e}")
+
     # Validate inputs
     if market_type not in MARKET_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid market type: {market_type}")

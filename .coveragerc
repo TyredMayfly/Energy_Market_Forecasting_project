@@ -1,0 +1,40 @@
+[run]
+# Enable branch coverage (measures which branches in conditionals are taken)
+branch = True
+
+# Specify the source code to measure
+source =
+    app
+
+# Parallel mode for coverage across multiple processes (if needed)
+# parallel = True
+
+[report]
+# Omit files that shouldn't be included in coverage reports
+omit =
+    tests/*
+    scripts/*
+    */__init__.py
+    */migrations/*
+    .venv/*
+    setup.py
+
+# Show line numbers of missing coverage
+show_missing = True
+
+# Precision for coverage percentages
+precision = 2
+
+# Skip files with no executable code
+skip_empty = True
+
+# Sort by percentage covered
+sort = Cover
+
+[html]
+# Directory for HTML coverage report
+directory = htmlcov
+
+[xml]
+# Output file for XML coverage report (useful for CI tools)
+output = coverage.xml

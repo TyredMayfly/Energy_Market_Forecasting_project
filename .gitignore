@@ -50,6 +50,7 @@ ENV/
 .coverage
 htmlcov/
 *.cover
+coverage.xml
 
 # Logs
 *.log

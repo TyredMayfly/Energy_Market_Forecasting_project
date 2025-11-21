@@ -269,6 +269,8 @@ class TestRunHyperparameterSearch:
         # Mock best estimator
         mock_estimator = MagicMock()
         mock_estimator.score.return_value = 0.83
+        # Mock predict to return proper numpy array for RMSE calculation
+        mock_estimator.predict.return_value = np.random.randn(n_samples // 5)  # test set size
         mock_search_instance.best_estimator_ = mock_estimator
 
         mock_search_cv.return_value = mock_search_instance
