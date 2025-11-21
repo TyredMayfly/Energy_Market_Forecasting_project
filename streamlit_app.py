@@ -776,52 +776,38 @@ def plot_forecast_results(
             f"Price range: {forecast_df_display['forecast_price_eur_per_mwh'].min():.2f}-{forecast_df_display['forecast_price_eur_per_mwh'].max():.2f} EUR/MWh"
         )
 
-    if False:  # Compare models removed
-        pass
-    else:
-                # Use line+markers for regression
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_model["timestamp_utc"],
-                        y=df_model["forecast_price_eur_per_mwh"],
-                        mode="lines+markers",
-                        name=MODEL_TYPES[mtype]["display_name"],
-                        line=dict(color=colors.get(mtype, "orange"), width=3),
-                        marker=dict(size=6),
-                    )
-                )
-    else:
-        if is_classification:
-            # Use bar chart for classification
-            # Define color mapping for regulation states
-            state_colors = {
-                -1: "#E74C3C",  # Red for deficit
-                0: "#95A5A6",   # Gray for balanced
-                1: "#3498DB",   # Blue for surplus (light)
-                2: "#2ECC71",   # Green for surplus (strong)
-            }
-            # Map each bar to appropriate color based on state
-            bar_colors = [
-                state_colors.get(int(val), "#34495E") 
-                for val in forecast_df_display["forecast_price_eur_per_mwh"]
-            ]
-            
-            fig.add_trace(
-                go.Bar(
-                    x=forecast_df_display["timestamp_utc"],
-                    y=forecast_df_display["forecast_price_eur_per_mwh"],
-                    name=f"{MODEL_TYPES[config['model_type']]['display_name']} Forecast",
-                    marker=dict(color=bar_colors),
-                )
+    # Single model plotting
+    if is_classification:
+        # Use bar chart for classification
+        # Define color mapping for regulation states
+        state_colors = {
+            -1: "#E74C3C",  # Red for deficit
+            0: "#95A5A6",   # Gray for balanced
+            1: "#3498DB",   # Blue for surplus (light)
+            2: "#2ECC71",   # Green for surplus (strong)
+        }
+        # Map each bar to appropriate color based on state
+        bar_colors = [
+            state_colors.get(int(val), "#34495E") 
+            for val in forecast_df_display["forecast_price_eur_per_mwh"]
+        ]
+        
+        fig.add_trace(
+            go.Bar(
+                x=forecast_df_display["timestamp_utc"],
+                y=forecast_df_display["forecast_price_eur_per_mwh"],
+                name=f"{MODEL_TYPES[config['model_type']]['display_name']} Forecast",
+                marker=dict(color=bar_colors),
             )
-        else:
-            # Use line+markers for regression
-            fig.add_trace(
-                go.Scatter(
-                    x=forecast_df_display["timestamp_utc"],
-                    y=forecast_df_display["forecast_price_eur_per_mwh"],
-                    mode="lines+markers",
-                    name=f"{MODEL_TYPES[config['model_type']]['display_name']} Forecast",
+        )
+    else:
+        # Use line+markers for regression
+        fig.add_trace(
+            go.Scatter(
+                x=forecast_df_display["timestamp_utc"],
+                y=forecast_df_display["forecast_price_eur_per_mwh"],
+                mode="lines+markers",
+                name=f"{MODEL_TYPES[config['model_type']]['display_name']} Forecast",
                     line=dict(color="blue", width=3),
                     marker=dict(size=8),
                 )
