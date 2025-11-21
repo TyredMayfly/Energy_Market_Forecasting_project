@@ -1156,23 +1156,10 @@ def render_results_section(
         )
 
     with tab2:
-        if False:  # Compare models removed
-            pass
-                    elif mtype == "linear_regression" and "coefficients" in model_info:
-                        st.markdown("**Model Coefficients:**")
-                        st.write(f"Intercept: {model_info['intercept']:.4f}")
-                        coef_df = pd.DataFrame(
-                            {
-                                "Feature": model_info["feature_columns"][:10],
-                                "Coefficient": model_info["coefficients"][:10],
-                            }
-                        )
-                        st.dataframe(coef_df, hide_index=True)
-        else:
-            model_info = metadata.get("model_info")
-            if model_info:
-                st.write(f"**Model:** {MODEL_TYPES[config['model_type']]['display_name']}")
-                st.write(f"**Trained at:** {model_info['trained_at']}")
+        model_info = metadata.get("model_info")
+        if model_info:
+            st.write(f"**Model:** {MODEL_TYPES[config['model_type']]['display_name']}")
+            st.write(f"**Trained at:** {model_info['trained_at']}")
                 st.write(f"**Training samples:** {model_info['n_samples']}")
                 st.write(f"**Features used:** {len(model_info['feature_columns'])}")
 
